@@ -1,0 +1,800 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg:#17140f;
+    --bg-panel:#211d16;
+    --bg-panel-2:#2a2418;
+    --text:#f3ecdd;
+    --text-dim:#b4a991;
+    --accent:#e8a33d;
+    --accent-soft:#3a2f1c;
+    --ok:#5f8a72;
+    --ok-soft:#20281f;
+    --pending:#d9c46a;
+    --pending-soft:#2c2818;
+    --danger:#c1553b;
+    --danger-soft:#2c1c17;
+    --line:#3a342a;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;}
+  .app{max-width:1000px;margin:0 auto;padding:28px 20px 60px;}
+
+  /* header */
+  .masthead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:22px;}
+  .masthead h1{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:38px;letter-spacing:0.5px;margin:0;text-transform:uppercase;}
+  .masthead .sub{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text-dim);margin-top:4px;letter-spacing:0.5px;}
+  .stats{display:flex;gap:18px;font-family:'IBM Plex Mono',monospace;}
+  .stat{text-align:right;}
+  .stat .n{font-size:22px;color:var(--accent);font-weight:500;}
+  .stat .l{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;}
+
+  /* tabs */
+  .tabs{display:flex;gap:2px;margin-bottom:22px;border:1px solid var(--line);border-radius:8px;overflow:hidden;width:fit-content;}
+  .tab{font-family:'Barlow Condensed',sans-serif;font-size:16px;letter-spacing:0.5px;text-transform:uppercase;padding:10px 18px;background:var(--bg-panel);color:var(--text-dim);cursor:pointer;border:none;transition:background .15s,color .15s;}
+  .tab.active{background:var(--accent);color:#1c1608;font-weight:600;}
+  .tab:not(.active):hover{background:var(--bg-panel-2);color:var(--text);}
+
+  .panel{background:var(--bg-panel);border:1px solid var(--line);border-radius:10px;padding:22px;}
+  .panel + .panel{margin-top:16px;}
+
+  /* film sprocket strip */
+  .sprockets{display:flex;gap:6px;padding:0 2px 14px;}
+  .sprockets span{width:6px;height:6px;border-radius:1px;background:var(--line);}
+
+  h2.section-title{font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:0.5px;font-size:20px;margin:0 0 14px;color:var(--text);}
+
+  /* calendar */
+  .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .cal-nav button{background:none;border:1px solid var(--line);color:var(--text);border-radius:6px;padding:6px 12px;font-family:'IBM Plex Mono',monospace;cursor:pointer;}
+  .cal-nav button:hover{border-color:var(--accent);color:var(--accent);}
+  .cal-month{font-family:'Barlow Condensed',sans-serif;font-size:22px;text-transform:uppercase;letter-spacing:1px;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;}
+  .cal-dow{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-dim);text-align:center;padding-bottom:4px;text-transform:uppercase;}
+  .cal-day{min-height:78px;border:1px solid var(--line);border-radius:6px;padding:5px 5px;background:var(--bg-panel-2);position:relative;}
+  .cal-day.empty{background:transparent;border-color:transparent;}
+  .cal-day .dnum{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim);}
+  .cal-day.today .dnum{color:var(--accent);font-weight:600;}
+  .cal-chip{font-size:10px;line-height:1.3;background:var(--danger-soft);color:var(--danger);border-left:2px solid var(--danger);border-radius:3px;padding:1px 4px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default;}
+  .cal-chip.pending{background:var(--pending-soft);color:var(--pending);border-color:var(--pending);}
+
+  /* camera cards */
+  .cam-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;}
+  .cam-card{border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--bg-panel-2);position:relative;cursor:pointer;transition:border-color .15s;}
+  .cam-card:hover{border-color:var(--accent);}
+  .cam-card .iris{width:16px;height:16px;border-radius:50%;border:2px solid var(--text-dim);position:absolute;top:12px;right:12px;transition:transform .2s, border-color .2s;}
+  .cam-card:hover .iris{transform:scale(0.7);border-color:var(--accent);}
+  .cam-card .name{font-family:'Barlow Condensed',sans-serif;font-size:18px;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:6px;padding-right:22px;}
+  .badge{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;padding:2px 7px;border-radius:20px;}
+  .badge.free{background:var(--ok-soft);color:var(--ok);}
+  .badge.busy{background:var(--danger-soft);color:var(--danger);}
+
+  /* form */
+  label{display:block;font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-dim);margin-bottom:5px;margin-top:14px;}
+  label:first-child{margin-top:0;}
+  input[type=text],input[type=date],select,textarea{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:9px 10px;font-family:'Inter',sans-serif;font-size:14px;}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  textarea{resize:vertical;min-height:60px;}
+  .btn{font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:0.5px;font-size:16px;background:var(--accent);color:#1c1608;border:none;border-radius:6px;padding:10px 20px;cursor:pointer;font-weight:600;margin-top:18px;}
+  .btn:hover{filter:brightness(1.08);}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text);}
+  .btn.small{font-size:13px;padding:6px 12px;margin-top:0;}
+  .btn.danger{background:var(--danger);color:#fff;}
+  .btn:disabled{opacity:0.4;cursor:not-allowed;}
+  .msg{font-family:'IBM Plex Mono',monospace;font-size:12px;margin-top:12px;padding:8px 10px;border-radius:6px;}
+  .msg.ok{background:var(--ok-soft);color:var(--ok);}
+  .msg.warn{background:var(--pending-soft);color:var(--pending);}
+  .msg.err{background:var(--danger-soft);color:var(--danger);}
+
+  /* requests list */
+  .req-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 4px;border-bottom:1px solid var(--line);flex-wrap:wrap;}
+  .req-row:last-child{border-bottom:none;}
+  .req-main{font-size:14px;}
+  .req-main b{color:var(--text);}
+  .req-meta{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim);margin-top:2px;}
+  .req-actions{display:flex;gap:8px;}
+  .empty-note{color:var(--text-dim);font-size:13px;padding:20px 4px;text-align:center;font-family:'IBM Plex Mono',monospace;}
+
+  .pin-gate{max-width:260px;margin:20px auto;text-align:center;}
+  .pin-gate input{text-align:center;letter-spacing:6px;font-family:'IBM Plex Mono',monospace;font-size:20px;}
+
+  .admin-manage{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+  .cam-tag{display:flex;align-items:center;gap:6px;background:var(--bg-panel-2);border:1px solid var(--line);border-radius:20px;padding:5px 6px 5px 12px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .cam-tag button{background:none;border:none;color:var(--danger);cursor:pointer;font-size:13px;padding:0 4px;}
+
+  @media(max-width:640px){
+    .row2{grid-template-columns:1fr;}
+    .cal-day{min-height:56px;}
+    .cal-chip{font-size:8px;}
+  }
+
+  /* modal de disponibilidade */
+  .modal-overlay{position:fixed;inset:0;background:rgba(10,8,5,0.72);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px;}
+  .modal-panel{background:var(--bg-panel);border:1px solid var(--line);border-radius:12px;padding:20px;max-width:420px;width:100%;max-height:85vh;overflow:auto;}
+  .modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+  .cal-day.booked{background:var(--danger-soft);border-color:var(--danger);}
+  .cal-day.pendingday{background:var(--pending-soft);border-color:var(--pending);}
+  .cal-day.freeday{background:var(--ok-soft);border-color:var(--ok);cursor:pointer;}
+  .cal-day.freeday:hover{border-color:var(--accent);}
+  .cal-day.pastday{opacity:0.35;}
+  .cal-day.sel-edge{outline:2px solid var(--accent);outline-offset:-2px;}
+  .cal-day.sel-range{background:var(--accent-soft);border-color:var(--accent);}
+  .legend{display:flex;gap:14px;margin-top:14px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim);flex-wrap:wrap;}
+  .legend-dot{display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--bg-panel-2);border:1px solid var(--line);margin-right:5px;vertical-align:middle;}
+  .legend-dot.booked{background:var(--danger-soft);border-color:var(--danger);}
+  .legend-dot.pendingday{background:var(--pending-soft);border-color:var(--pending);}
+</style>
+
+<div class="app" id="app">
+  <div class="masthead">
+    <div>
+      <h1>Reserva de Câmeras</h1>
+      <div class="sub" id="subtitle">carregando...</div>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-tab="agenda">Agenda</button>
+    <button class="tab" data-tab="solicitar">Solicitar</button>
+    <button class="tab" data-tab="admin">Administração</button>
+  </div>
+
+  <div id="view"></div>
+</div>
+<div id="modalRoot"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
+<script>
+(function(){
+  // =====================================================================
+  // 1) COLE AQUI A CONFIGURAÇÃO DO SEU PROJETO FIREBASE (passo 3 do guia)
+  // =====================================================================
+  const firebaseConfig = {
+    apiKey: "AIzaSyAGTBcfoVBzbeSj9OR4D6rcEO7cLBb-Wkk",
+    authDomain: "sistema-de-reservas-c4aa2.firebaseapp.com",
+    projectId: "sistema-de-reservas-c4aa2",
+    storageBucket: "sistema-de-reservas-c4aa2.firebasestorage.app",
+    messagingSenderId: "593957438680",
+    appId: "1:593957438680:web:4d78bfcbc4cddb3a7883ad",
+    measurementId: "G-D5Y330PCSX"
+  };
+  // =====================================================================
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const COLLECTION = 'reserva-cameras';
+
+  // =====================================================================
+  // 2) COLE AQUI A CONFIGURAÇÃO DO EMAILJS (para o e-mail de confirmação)
+  //    Guia: crie conta em emailjs.com → Email Services → Email Templates
+  // =====================================================================
+  const emailjsConfig = {
+    publicKey: "6oo-g_XpASRAjcd1f",
+    serviceId: "service_hf3hnzm",
+    templateId: "template_tanybzr"
+  };
+  // =====================================================================
+  if(window.emailjs && emailjsConfig.publicKey !== "SUA_PUBLIC_KEY"){
+    emailjs.init({ publicKey: emailjsConfig.publicKey });
+  }
+
+  async function sendConfirmationEmail(r, statusTitle, statusMessage){
+    if(!r.email) return;
+    if(!window.emailjs || emailjsConfig.publicKey === "SUA_PUBLIC_KEY") return; // não configurado ainda
+    try{
+      await emailjs.send(emailjsConfig.serviceId, emailjsConfig.templateId, {
+        to_email: r.email,
+        to_name: r.studentName,
+        camera_name: camName(r.cameraId),
+        start_date: r.startDate,
+        end_date: r.endDate,
+        status_title: statusTitle,
+        status_message: statusMessage
+      });
+    }catch(e){ console.error('Erro ao enviar e-mail', e); }
+  }
+
+  // =====================================================================
+  // 3) E-MAIL DO ADMINISTRADOR — recebe um aviso a cada nova solicitação
+  // =====================================================================
+  const ADMIN_EMAIL = "gabrielgarcia@unidavi.edu.br";
+  // =====================================================================
+
+  async function notifyAdmin(r){
+    if(!ADMIN_EMAIL) return;
+    if(!window.emailjs || emailjsConfig.publicKey === "SUA_PUBLIC_KEY") return;
+    try{
+      await emailjs.send(emailjsConfig.serviceId, emailjsConfig.templateId, {
+        to_email: ADMIN_EMAIL,
+        to_name: 'Administrador',
+        camera_name: camName(r.cameraId),
+        start_date: r.startDate,
+        end_date: r.endDate,
+        status_title: 'Nova solicitação de reserva',
+        status_message: `${r.studentName} (${r.email}) solicitou o equipamento "${camName(r.cameraId)}" para o período de ${r.startDate} até ${r.endDate}. Acesse a aba Administração para aprovar ou recusar.`
+      });
+    }catch(e){ console.error('Erro ao notificar administrador', e); }
+  }
+
+  const ADMIN_PIN = 'prm@#';
+
+  let cameras = [];
+  let reservations = [];
+  let currentTab = 'agenda';
+  let calMonth = new Date().getMonth();
+  let calYear = new Date().getFullYear();
+  let modalCamId = null;
+  let modalMonth = new Date().getMonth();
+  let modalYear = new Date().getFullYear();
+  let modalSelStart = null;
+  let modalSelEnd = null;
+  let carryOverRequest = null;
+  let adminUnlocked = false;
+  let loaded = false;
+
+  const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const DOW = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+  function uid(){ return Math.random().toString(36).slice(2,10); }
+  function todayStr(){ return new Date().toISOString().slice(0,10); }
+
+  function rangesOverlap(aStart,aEnd,bStart,bEnd){
+    return aStart <= bEnd && bStart <= aEnd;
+  }
+
+  async function loadState(){
+    try{
+      const camDoc = await db.collection(COLLECTION).doc('cameras').get();
+      cameras = camDoc.exists ? (camDoc.data().list || []) : null;
+    }catch(e){ console.error('erro ao carregar câmeras', e); cameras = null; }
+    if(!cameras || !cameras.length){
+      cameras = Array.from({length:8}, (_,i)=>({id: uid(), name: 'Kit ' + String(i+1).padStart(2,'0')}));
+      await saveCameras();
+    }
+    try{
+      const resDoc = await db.collection(COLLECTION).doc('reservations').get();
+      reservations = resDoc.exists ? (resDoc.data().list || []) : [];
+    }catch(e){ console.error('erro ao carregar reservas', e); reservations = []; }
+    loaded = true;
+
+    // Mantém tudo sincronizado em tempo real entre todos que estiverem com a página aberta.
+    // Só re-renderiza automaticamente na aba Agenda, para não apagar o que alguém
+    // esteja digitando num formulário em outra aba.
+    db.collection(COLLECTION).doc('cameras').onSnapshot(doc=>{
+      if(doc.exists){ cameras = doc.data().list || []; if(currentTab==='agenda') render(); }
+    });
+    db.collection(COLLECTION).doc('reservations').onSnapshot(doc=>{
+      if(doc.exists){ reservations = doc.data().list || []; if(currentTab==='agenda') render(); }
+    });
+  }
+
+  async function saveCameras(){
+    try{ await db.collection(COLLECTION).doc('cameras').set({list: cameras}); }
+    catch(e){ console.error('erro ao salvar câmeras', e); }
+  }
+  async function saveReservations(){
+    try{ await db.collection(COLLECTION).doc('reservations').set({list: reservations}); }
+    catch(e){ console.error('erro ao salvar reservas', e); }
+  }
+
+  function camName(id){
+    const c = cameras.find(c=>c.id===id);
+    return c ? c.name : '(removida)';
+  }
+
+  function isCameraFreeToday(camId){
+    const t = todayStr();
+    return !reservations.some(r => r.cameraId===camId && r.status==='approved' && rangesOverlap(r.startDate, r.endDate, t, t));
+  }
+
+  function renderStats(){
+    const pending = reservations.filter(r=>r.status==='pending').length;
+    const approvedToday = cameras.filter(c=>!isCameraFreeToday(c.id)).length;
+    document.getElementById('subtitle').textContent = cameras.length + ' equipamentos cadastrados · aprovação necessária';
+    document.getElementById('stats').innerHTML = `
+      <div class="stat"><div class="n">${cameras.length - approvedToday}</div><div class="l">Livres hoje</div></div>
+      <div class="stat"><div class="n">${pending}</div><div class="l">Pendentes</div></div>
+    `;
+  }
+
+  function sprockets(n){
+    let s = '<div class="sprockets">';
+    for(let i=0;i<n;i++) s += '<span></span>';
+    s += '</div>';
+    return s;
+  }
+
+  // ---------- AGENDA VIEW ----------
+  function renderAgenda(){
+    const first = new Date(calYear, calMonth, 1);
+    const startDow = first.getDay();
+    const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+    const today = todayStr();
+
+    let cells = '';
+    for(let i=0;i<startDow;i++) cells += '<div class="cal-day empty"></div>';
+    for(let d=1; d<=daysInMonth; d++){
+      const dateStr = calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      const dayRes = reservations.filter(r => r.status!=='rejected' && rangesOverlap(r.startDate, r.endDate, dateStr, dateStr));
+      const isToday = dateStr === today;
+      let chips = dayRes.slice(0,3).map(r => `<div class="cal-chip ${r.status==='pending'?'pending':''}" title="${camName(r.cameraId)} — ${r.studentName}">${camName(r.cameraId)}</div>`).join('');
+      if(dayRes.length > 3) chips += `<div class="cal-chip">+${dayRes.length-3}</div>`;
+      cells += `<div class="cal-day ${isToday?'today':''}"><div class="dnum">${d}</div>${chips}</div>`;
+    }
+
+    const dow = DOW.map(d=>`<div class="cal-dow">${d}</div>`).join('');
+
+    document.getElementById('view').innerHTML = `
+      <div class="panel">
+        ${sprockets(24)}
+        <div class="cal-nav">
+          <button id="prevMonth">← anterior</button>
+          <div class="cal-month">${MONTHS[calMonth]} ${calYear}</div>
+          <button id="nextMonth">próximo →</button>
+        </div>
+        <div class="cal-grid">${dow}${cells}</div>
+      </div>
+      <div class="panel">
+        <h2 class="section-title">Equipamentos</h2>
+        <div class="cam-grid">
+          ${cameras.map(c => `
+            <div class="cam-card" data-camid="${c.id}">
+              <div class="iris"></div>
+              <div class="name">${c.name}</div>
+              <span class="badge ${isCameraFreeToday(c.id)?'free':'busy'}">${isCameraFreeToday(c.id)?'Livre hoje':'Em uso hoje'}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    document.getElementById('prevMonth').onclick = ()=>{ calMonth--; if(calMonth<0){calMonth=11;calYear--;} renderAgenda(); };
+    document.getElementById('nextMonth').onclick = ()=>{ calMonth++; if(calMonth>11){calMonth=0;calYear++;} renderAgenda(); };
+    document.querySelectorAll('.cam-card').forEach(card=>{
+      card.onclick = ()=> openCamModal(card.dataset.camid);
+    });
+  }
+
+  // ---------- MODAL DE DISPONIBILIDADE POR EQUIPAMENTO ----------
+  function openCamModal(camId){
+    modalCamId = camId;
+    modalMonth = new Date().getMonth();
+    modalYear = new Date().getFullYear();
+    modalSelStart = null;
+    modalSelEnd = null;
+    renderCamModal();
+  }
+
+  function closeCamModal(){
+    modalCamId = null;
+    modalSelStart = null;
+    modalSelEnd = null;
+    document.getElementById('modalRoot').innerHTML = '';
+  }
+
+  function dayStatus(camId, dateStr){
+    const dayRes = reservations.filter(r => r.cameraId===camId && r.status!=='rejected' && rangesOverlap(r.startDate, r.endDate, dateStr, dateStr));
+    if(dayRes.some(r=>r.status==='approved')) return 'booked';
+    if(dayRes.some(r=>r.status==='pending')) return 'pendingday';
+    return 'freeday';
+  }
+
+  function isRangeClear(camId, start, end){
+    let d = new Date(start+'T00:00:00');
+    const endD = new Date(end+'T00:00:00');
+    while(d <= endD){
+      const ds = d.toISOString().slice(0,10);
+      if(dayStatus(camId, ds) === 'booked') return false;
+      d.setDate(d.getDate()+1);
+    }
+    return true;
+  }
+
+  function handleDayClick(dateStr){
+    const status = dayStatus(modalCamId, dateStr);
+    if(status !== 'freeday' || dateStr < todayStr()) return;
+
+    if(!modalSelStart || !modalSelEnd){
+      // ainda escolhendo o intervalo inicial (retirada e/ou devolução)
+      if(!modalSelStart){
+        modalSelStart = dateStr;
+      }else if(dateStr < modalSelStart){
+        modalSelStart = dateStr;
+      }else if(isRangeClear(modalCamId, modalSelStart, dateStr)){
+        modalSelEnd = dateStr;
+      }else{
+        alert('Esse período inclui um dia já reservado. Escolha um intervalo sem conflitos.');
+        modalSelStart = dateStr;
+        modalSelEnd = null;
+      }
+    }else{
+      // já existe um intervalo completo — clicar fora dele estende a reserva, clicar dentro reinicia
+      if(dateStr > modalSelEnd){
+        if(isRangeClear(modalCamId, modalSelStart, dateStr)) modalSelEnd = dateStr;
+        else alert('Esse período inclui um dia já reservado. Escolha um intervalo sem conflitos.');
+      }else if(dateStr < modalSelStart){
+        if(isRangeClear(modalCamId, dateStr, modalSelEnd)) modalSelStart = dateStr;
+        else alert('Esse período inclui um dia já reservado. Escolha um intervalo sem conflitos.');
+      }else{
+        modalSelStart = dateStr;
+        modalSelEnd = null;
+      }
+    }
+    renderCamModal();
+  }
+
+  function renderCamModal(){
+    const cam = cameras.find(c=>c.id===modalCamId);
+    if(!cam){ closeCamModal(); return; }
+
+    const first = new Date(modalYear, modalMonth, 1);
+    const startDow = first.getDay();
+    const daysInMonth = new Date(modalYear, modalMonth+1, 0).getDate();
+    const today = todayStr();
+
+    let cells = '';
+    for(let i=0;i<startDow;i++) cells += '<div class="cal-day empty"></div>';
+    for(let d=1; d<=daysInMonth; d++){
+      const dateStr = modalYear+'-'+String(modalMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      const status = dayStatus(modalCamId, dateStr);
+      const isToday = dateStr === today;
+      const isPast = dateStr < today;
+      let cls = ['cal-day', status];
+      if(isToday) cls.push('today');
+      if(isPast) cls.push('pastday');
+      if(dateStr===modalSelStart || dateStr===modalSelEnd) cls.push('sel-edge');
+      if(modalSelStart && modalSelEnd && dateStr > modalSelStart && dateStr < modalSelEnd) cls.push('sel-range');
+      cells += `<div class="${cls.join(' ')}" data-date="${dateStr}"><div class="dnum">${d}</div></div>`;
+    }
+
+    const dow = DOW.map(d=>`<div class="cal-dow">${d}</div>`).join('');
+    const canSubmit = modalSelStart && modalSelEnd;
+    const rangeLabel = modalSelStart
+      ? (modalSelEnd ? `${modalSelStart} → ${modalSelEnd}` : `${modalSelStart} → selecione a devolução`)
+      : 'Clique num dia livre para escolher a retirada';
+
+    document.getElementById('modalRoot').innerHTML = `
+      <div class="modal-overlay" id="modalOverlay">
+        <div class="modal-panel">
+          <div class="modal-head">
+            <h2 class="section-title" style="margin:0;">${cam.name}</h2>
+            <button class="btn ghost small" id="closeModal">Fechar ✕</button>
+          </div>
+          <div class="cal-nav">
+            <button id="modalPrev">← anterior</button>
+            <div class="cal-month">${MONTHS[modalMonth]} ${modalYear}</div>
+            <button id="modalNext">próximo →</button>
+          </div>
+          <div class="cal-grid">${dow}${cells}</div>
+          <div class="legend">
+            <div><span class="legend-dot booked"></span>Reservado</div>
+            <div><span class="legend-dot pendingday"></span>Pendente</div>
+            <div><span class="legend-dot freeday"></span>Livre</div>
+          </div>
+          <div class="req-meta" style="margin-top:12px;">${rangeLabel}</div>
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <button class="btn ghost small" id="clearSel">Limpar seleção</button>
+            <button class="btn" id="modalSolicitar" style="flex:1;margin-top:0;" ${canSubmit ? '' : 'disabled'}>Solicitar estas datas</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.getElementById('closeModal').onclick = closeCamModal;
+    document.getElementById('modalOverlay').onclick = (e)=>{ if(e.target.id==='modalOverlay') closeCamModal(); };
+    document.getElementById('modalPrev').onclick = ()=>{ modalMonth--; if(modalMonth<0){modalMonth=11;modalYear--;} renderCamModal(); };
+    document.getElementById('modalNext').onclick = ()=>{ modalMonth++; if(modalMonth>11){modalMonth=0;modalYear++;} renderCamModal(); };
+    document.getElementById('clearSel').onclick = ()=>{ modalSelStart=null; modalSelEnd=null; renderCamModal(); };
+    document.querySelectorAll('#modalRoot .cal-day[data-date]').forEach(el=>{
+      el.onclick = ()=> handleDayClick(el.dataset.date);
+    });
+    if(canSubmit){
+      document.getElementById('modalSolicitar').onclick = ()=>{
+        carryOverRequest = { camId: modalCamId, start: modalSelStart, end: modalSelEnd };
+        closeCamModal();
+        document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+        document.querySelector('.tab[data-tab="solicitar"]').classList.add('active');
+        currentTab = 'solicitar';
+        render();
+      };
+    }
+  }
+
+  // ---------- SOLICITAR VIEW ----------
+  function getAvailableCameras(start, end){
+    if(!start || !end) return cameras;
+    return cameras.filter(c => !reservations.some(r =>
+      r.cameraId === c.id && r.status === 'approved' && rangesOverlap(r.startDate, r.endDate, start, end)
+    ));
+  }
+
+  function refreshCameraOptions(){
+    const start = document.getElementById('f-start').value;
+    const end = document.getElementById('f-end').value;
+    const selectEl = document.getElementById('f-camera');
+    const noteEl = document.getElementById('availNote');
+    const prevVal = selectEl.value;
+
+    const avail = getAvailableCameras(start, end);
+    const unavailableCount = cameras.length - avail.length;
+
+    selectEl.innerHTML = avail.length
+      ? avail.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')
+      : `<option value="">Nenhum equipamento livre nesse período</option>`;
+
+    if(avail.some(c=>c.id===prevVal)) selectEl.value = prevVal;
+    selectEl.disabled = avail.length === 0;
+
+    if(!start || !end){
+      noteEl.textContent = 'Escolha as datas para ver quais equipamentos estão livres.';
+    }else if(unavailableCount > 0){
+      noteEl.textContent = `${unavailableCount} equipamento(s) indisponível(is) nesse período — já reservado(s).`;
+    }else{
+      noteEl.textContent = '';
+    }
+  }
+
+  function renderSolicitar(){
+    document.getElementById('view').innerHTML = `
+      <div class="panel">
+        <h2 class="section-title">Solicitar reserva</h2>
+        <label>Seu nome</label>
+        <input type="text" id="f-name" placeholder="Nome completo">
+        <label>Seu e-mail</label>
+        <input type="text" id="f-email" placeholder="voce@exemplo.com">
+        <div class="row2">
+          <div>
+            <label>Retirada</label>
+            <input type="date" id="f-start" min="${todayStr()}">
+          </div>
+          <div>
+            <label>Devolução</label>
+            <input type="date" id="f-end" min="${todayStr()}">
+          </div>
+        </div>
+        <label>Equipamento</label>
+        <select id="f-camera"></select>
+        <div class="req-meta" id="availNote" style="margin-top:6px;"></div>
+        <label>Observações (opcional)</label>
+        <textarea id="f-notes" placeholder="Ex: uso para trabalho da disciplina X"></textarea>
+        <button class="btn" id="submitReq">Enviar solicitação</button>
+        <div id="formMsg"></div>
+      </div>
+    `;
+
+    refreshCameraOptions();
+
+    if(carryOverRequest){
+      document.getElementById('f-start').value = carryOverRequest.start;
+      document.getElementById('f-end').value = carryOverRequest.end;
+      refreshCameraOptions();
+      const selectEl = document.getElementById('f-camera');
+      if([...selectEl.options].some(o=>o.value===carryOverRequest.camId)){
+        selectEl.value = carryOverRequest.camId;
+      }
+      carryOverRequest = null;
+    }
+
+    document.getElementById('f-start').onchange = refreshCameraOptions;
+    document.getElementById('f-end').onchange = refreshCameraOptions;
+
+    document.getElementById('submitReq').onclick = async ()=>{
+      const name = document.getElementById('f-name').value.trim();
+      const email = document.getElementById('f-email').value.trim();
+      const camId = document.getElementById('f-camera').value;
+      const start = document.getElementById('f-start').value;
+      const end = document.getElementById('f-end').value;
+      const notes = document.getElementById('f-notes').value.trim();
+      const msgEl = document.getElementById('formMsg');
+
+      if(!name || !email || !start || !end){
+        msgEl.innerHTML = `<div class="msg err">Preencha nome, e-mail, data de retirada e devolução.</div>`;
+        return;
+      }
+      if(!/^\S+@\S+\.\S+$/.test(email)){
+        msgEl.innerHTML = `<div class="msg err">Digite um e-mail válido.</div>`;
+        return;
+      }
+      if(end < start){
+        msgEl.innerHTML = `<div class="msg err">A data de devolução não pode ser antes da retirada.</div>`;
+        return;
+      }
+      if(!camId){
+        msgEl.innerHTML = `<div class="msg err">Nenhum equipamento disponível para essas datas — tente outro período.</div>`;
+        return;
+      }
+      // Checagem final de conflito (garante mesmo se os dados mudaram entre a digitação e o envio)
+      const conflict = reservations.some(r => r.cameraId===camId && r.status==='approved' && rangesOverlap(r.startDate, r.endDate, start, end));
+      if(conflict){
+        msgEl.innerHTML = `<div class="msg err">Esse equipamento acabou de ser reservado por outra pessoa nesse período. Escolha outro.</div>`;
+        refreshCameraOptions();
+        return;
+      }
+
+      const newRes = {
+        id: uid(), cameraId: camId, studentName: name, email,
+        startDate: start, endDate: end, notes,
+        status: 'pending', requestedAt: new Date().toISOString()
+      };
+      reservations.push(newRes);
+      await saveReservations();
+      sendConfirmationEmail(newRes, 'Solicitação recebida', 'Sua solicitação de reserva foi registrada e está aguardando aprovação. Você receberá um novo e-mail assim que ela for avaliada.');
+      notifyAdmin(newRes);
+
+      msgEl.innerHTML = `<div class="msg ok">Solicitação enviada! Você vai receber um e-mail de confirmação e outro quando ela for avaliada.</div>`;
+      document.getElementById('f-name').value='';
+      document.getElementById('f-email').value='';
+      document.getElementById('f-notes').value='';
+      refreshCameraOptions();
+      renderStats();
+    };
+  }
+
+  // ---------- ADMIN VIEW ----------
+  function renderAdmin(){
+    if(!adminUnlocked){
+      document.getElementById('view').innerHTML = `
+        <div class="panel pin-gate">
+          <h2 class="section-title">Área restrita</h2>
+          <label>PIN de administração</label>
+          <input type="text" id="pinInput" maxlength="8" placeholder="••••">
+          <button class="btn" id="pinSubmit" style="width:100%">Entrar</button>
+          <div id="pinMsg"></div>
+        </div>
+      `;
+      document.getElementById('pinSubmit').onclick = ()=>{
+        const val = document.getElementById('pinInput').value.trim();
+        if(val === ADMIN_PIN){ adminUnlocked = true; renderAdmin(); }
+        else document.getElementById('pinMsg').innerHTML = `<div class="msg err">PIN incorreto.</div>`;
+      };
+      return;
+    }
+
+    const pending = reservations.filter(r=>r.status==='pending').sort((a,b)=>a.startDate.localeCompare(b.startDate));
+    const decided = reservations.filter(r=>r.status!=='pending').sort((a,b)=>b.requestedAt.localeCompare(a.requestedAt)).slice(0,15);
+
+    document.getElementById('view').innerHTML = `
+      <div class="panel">
+        <h2 class="section-title">Solicitações pendentes (${pending.length})</h2>
+        ${pending.length ? pending.map(r=>`
+          <div class="req-row">
+            <div class="req-main">
+              <b>${camName(r.cameraId)}</b> · ${r.studentName} · ${r.email || 'sem e-mail'}
+              <div class="req-meta">${r.startDate} → ${r.endDate}${r.notes ? ' · '+r.notes : ''}</div>
+            </div>
+            <div class="req-actions">
+              <button class="btn small" data-id="${r.id}" data-action="approve">Aprovar</button>
+              <button class="btn small danger" data-id="${r.id}" data-action="reject">Recusar</button>
+              <button class="btn small ghost" data-id="${r.id}" data-action="delete">Excluir</button>
+            </div>
+          </div>
+        `).join('') : `<div class="empty-note">Nenhuma solicitação pendente.</div>`}
+      </div>
+
+      <div class="panel">
+        <h2 class="section-title">Histórico recente</h2>
+        ${decided.length ? decided.map(r=>`
+          <div class="req-row">
+            <div class="req-main">
+              <b>${camName(r.cameraId)}</b> · ${r.studentName}
+              <div class="req-meta">${r.startDate} → ${r.endDate} · <span style="color:${r.status==='approved'?'var(--ok)':'var(--danger)'}">${r.status==='approved'?'aprovada':'recusada'}</span></div>
+            </div>
+            <div class="req-actions">
+              <button class="btn small ghost" data-id="${r.id}" data-action="delete">Excluir</button>
+            </div>
+          </div>
+        `).join('') : `<div class="empty-note">Sem histórico ainda.</div>`}
+      </div>
+
+      <div class="panel">
+        <h2 class="section-title">Gerenciar equipamentos</h2>
+        <div class="admin-manage" id="camList">
+          ${cameras.map(c=>`
+            <div class="cam-tag">
+              <input type="text" class="cam-name-input" data-camid="${c.id}" value="${c.name.replace(/"/g,'&quot;')}" style="background:transparent;border:none;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;width:110px;padding:0;">
+              <button data-remove="${c.id}">✕</button>
+            </div>
+          `).join('')}
+        </div>
+        <div class="req-meta" style="margin-top:6px;">Edite o nome e clique fora do campo (ou aperte Enter) para salvar.</div>
+        <label>Adicionar equipamento</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="newCamName" placeholder="Nome do equipamento">
+          <button class="btn small" id="addCam">Adicionar</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('view').querySelectorAll('.cam-name-input').forEach(inp=>{
+      const commit = async ()=>{
+        const cam = cameras.find(c=>c.id===inp.dataset.camid);
+        const newName = inp.value.trim();
+        if(!cam || !newName || newName===cam.name) return;
+        cam.name = newName;
+        await saveCameras();
+        renderStats();
+      };
+      inp.addEventListener('blur', commit);
+      inp.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ inp.blur(); } });
+    });
+
+    document.getElementById('view').querySelectorAll('[data-action]').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const r = reservations.find(x=>x.id===btn.dataset.id);
+        if(!r) return;
+
+        if(btn.dataset.action==='delete'){
+          if(!confirm(`Excluir a reserva de ${r.studentName} (${camName(r.cameraId)}, ${r.startDate} → ${r.endDate})? Essa ação não pode ser desfeita.`)) return;
+          reservations = reservations.filter(x=>x.id!==r.id);
+          await saveReservations();
+          renderAdmin(); renderStats();
+          return;
+        }
+
+        if(btn.dataset.action==='approve'){
+          const conflict = reservations.some(o => o.id!==r.id && o.cameraId===r.cameraId && o.status==='approved' && rangesOverlap(o.startDate, o.endDate, r.startDate, r.endDate));
+          if(conflict){
+            alert('Não é possível aprovar: esse equipamento já tem outra reserva aprovada que se sobrepõe a este período. Recuse este pedido ou ajuste a outra reserva primeiro.');
+            return;
+          }
+        }
+        r.status = btn.dataset.action==='approve' ? 'approved' : 'rejected';
+        await saveReservations();
+        if(r.status==='approved'){
+          sendConfirmationEmail(r, 'Reserva aprovada ✅', 'Sua reserva foi aprovada! Pode retirar o equipamento na data combinada.');
+        }else{
+          sendConfirmationEmail(r, 'Reserva recusada', 'Sua solicitação de reserva não pôde ser aprovada para o período pedido. Entre em contato com o responsável para mais detalhes.');
+        }
+        renderAdmin(); renderStats();
+      };
+    });
+    document.getElementById('addCam').onclick = async ()=>{
+      const nameEl = document.getElementById('newCamName');
+      const name = nameEl.value.trim();
+      if(!name) return;
+      cameras.push({id: uid(), name});
+      await saveCameras();
+      renderAdmin(); renderStats();
+    };
+    document.getElementById('view').querySelectorAll('[data-remove]').forEach(btn=>{
+      btn.onclick = async ()=>{
+        cameras = cameras.filter(c=>c.id!==btn.dataset.remove);
+        await saveCameras();
+        renderAdmin(); renderStats();
+      };
+    });
+  }
+
+  function render(){
+    if(!loaded){
+      document.getElementById('view').innerHTML = `<div class="panel"><div class="empty-note">Carregando dados...</div></div>`;
+      return;
+    }
+    renderStats();
+    if(currentTab==='agenda') renderAgenda();
+    else if(currentTab==='solicitar') renderSolicitar();
+    else if(currentTab==='admin') renderAdmin();
+  }
+
+  document.getElementById('tabs').addEventListener('click', (e)=>{
+    const btn = e.target.closest('.tab');
+    if(!btn) return;
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    btn.classList.add('active');
+    currentTab = btn.dataset.tab;
+    render();
+  });
+
+  (async ()=>{
+    render();
+    await loadState();
+    render();
+  })();
+})();
+</script>
