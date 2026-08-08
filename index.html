@@ -58,6 +58,7 @@
   .cal-day.empty{background:transparent;border-color:transparent;}
   .cal-day .dnum{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim);}
   .cal-day.today .dnum{color:var(--accent);font-weight:600;}
+  .cal-day.selected{outline:2px solid var(--accent);outline-offset:-2px;}
   .cal-chip{font-size:10px;line-height:1.3;background:var(--danger-soft);color:var(--danger);border-left:2px solid var(--danger);border-radius:3px;padding:1px 4px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default;}
   .cal-chip.pending{background:var(--pending-soft);color:var(--pending);border-color:var(--pending);}
 
@@ -231,6 +232,7 @@
   let currentTab = 'agenda';
   let calMonth = new Date().getMonth();
   let calYear = new Date().getFullYear();
+  let agendaSelectedDate = todayStr();
   let modalCamId = null;
   let modalMonth = new Date().getMonth();
   let modalYear = new Date().getFullYear();
@@ -245,6 +247,10 @@
 
   function uid(){ return Math.random().toString(36).slice(2,10); }
   function todayStr(){ return new Date().toISOString().slice(0,10); }
+  function formatDateBR(dateStr){
+    const [y,m,d] = dateStr.split('-');
+    return `${d}/${m}/${y}`;
+  }
 
   function rangesOverlap(aStart,aEnd,bStart,bEnd){
     return aStart <= bEnd && bStart <= aEnd;
@@ -290,9 +296,11 @@
     return c ? c.name : '(removida)';
   }
 
+  function isCameraFreeOnDate(camId, dateStr){
+    return !reservations.some(r => r.cameraId===camId && r.status==='approved' && rangesOverlap(r.startDate, r.endDate, dateStr, dateStr));
+  }
   function isCameraFreeToday(camId){
-    const t = todayStr();
-    return !reservations.some(r => r.cameraId===camId && r.status==='approved' && rangesOverlap(r.startDate, r.endDate, t, t));
+    return isCameraFreeOnDate(camId, todayStr());
   }
 
   function renderStats(){
@@ -325,9 +333,10 @@
       const dateStr = calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
       const dayRes = reservations.filter(r => r.status!=='rejected' && rangesOverlap(r.startDate, r.endDate, dateStr, dateStr));
       const isToday = dateStr === today;
+      const isSelected = dateStr === agendaSelectedDate;
       let chips = dayRes.slice(0,3).map(r => `<div class="cal-chip ${r.status==='pending'?'pending':''}" title="${camName(r.cameraId)} — ${r.studentName}">${camName(r.cameraId)}</div>`).join('');
       if(dayRes.length > 3) chips += `<div class="cal-chip">+${dayRes.length-3}</div>`;
-      cells += `<div class="cal-day ${isToday?'today':''}"><div class="dnum">${d}</div>${chips}</div>`;
+      cells += `<div class="cal-day ${isToday?'today':''} ${isSelected?'selected':''}" data-date="${dateStr}"><div class="dnum">${d}</div>${chips}</div>`;
     }
 
     const dow = DOW.map(d=>`<div class="cal-dow">${d}</div>`).join('');
@@ -343,13 +352,17 @@
         <div class="cal-grid">${dow}${cells}</div>
       </div>
       <div class="panel">
-        <h2 class="section-title">Equipamentos</h2>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+          <h2 class="section-title" style="margin:0;">Equipamentos — ${agendaSelectedDate===today ? 'Hoje' : formatDateBR(agendaSelectedDate)}</h2>
+          ${agendaSelectedDate!==today ? `<button class="btn ghost small" id="backToToday">Voltar para hoje</button>` : ''}
+        </div>
+        <div class="req-meta" style="margin-bottom:10px;">Clique em um dia no calendário acima para ver a disponibilidade naquela data.</div>
         <div class="cam-grid">
           ${cameras.map(c => `
             <div class="cam-card" data-camid="${c.id}">
               <div class="iris"></div>
               <div class="name">${c.name}</div>
-              <span class="badge ${isCameraFreeToday(c.id)?'free':'busy'}">${isCameraFreeToday(c.id)?'Livre hoje':'Em uso hoje'}</span>
+              <span class="badge ${isCameraFreeOnDate(c.id, agendaSelectedDate)?'free':'busy'}">${isCameraFreeOnDate(c.id, agendaSelectedDate)?'Livre':'Em uso'}</span>
             </div>
           `).join('')}
         </div>
@@ -357,8 +370,14 @@
     `;
     document.getElementById('prevMonth').onclick = ()=>{ calMonth--; if(calMonth<0){calMonth=11;calYear--;} renderAgenda(); };
     document.getElementById('nextMonth').onclick = ()=>{ calMonth++; if(calMonth>11){calMonth=0;calYear++;} renderAgenda(); };
+    document.querySelectorAll('#view .cal-day[data-date]').forEach(el=>{
+      el.style.cursor = 'pointer';
+      el.onclick = ()=>{ agendaSelectedDate = el.dataset.date; renderAgenda(); };
+    });
+    const backBtn = document.getElementById('backToToday');
+    if(backBtn) backBtn.onclick = ()=>{ agendaSelectedDate = todayStr(); renderAgenda(); };
     document.querySelectorAll('.cam-card').forEach(card=>{
-      card.onclick = ()=> openCamModal(card.dataset.camid);
+      card.onclick = (e)=>{ e.stopPropagation(); openCamModal(card.dataset.camid); };
     });
   }
 
@@ -678,6 +697,33 @@
       </div>
 
       <div class="panel">
+        <h2 class="section-title">Registrar retirada manual</h2>
+        <div class="req-meta" style="margin-bottom:10px;">Para retiradas feitas fora do sistema (ex: direto com a coordenação). Datas passadas são permitidas e a reserva já entra como aprovada.</div>
+        <label>Nome do aluno</label>
+        <input type="text" id="m-name" placeholder="Nome completo">
+        <label>E-mail (opcional)</label>
+        <input type="text" id="m-email" placeholder="voce@exemplo.com">
+        <label>Equipamento</label>
+        <select id="m-camera">
+          ${cameras.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}
+        </select>
+        <div class="row2">
+          <div>
+            <label>Retirada</label>
+            <input type="date" id="m-start">
+          </div>
+          <div>
+            <label>Devolução</label>
+            <input type="date" id="m-end">
+          </div>
+        </div>
+        <label>Observações (opcional)</label>
+        <textarea id="m-notes" placeholder="Ex: retirada direto com a coordenação por urgência"></textarea>
+        <button class="btn" id="submitManual">Registrar retirada</button>
+        <div id="manualMsg"></div>
+      </div>
+
+      <div class="panel">
         <h2 class="section-title">Histórico recente</h2>
         ${decided.length ? decided.map(r=>`
           <div class="req-row">
@@ -754,6 +800,48 @@
         renderAdmin(); renderStats();
       };
     });
+
+    document.getElementById('submitManual').onclick = async ()=>{
+      const name = document.getElementById('m-name').value.trim();
+      const email = document.getElementById('m-email').value.trim();
+      const camId = document.getElementById('m-camera').value;
+      const start = document.getElementById('m-start').value;
+      const end = document.getElementById('m-end').value;
+      const notes = document.getElementById('m-notes').value.trim();
+      const msgEl = document.getElementById('manualMsg');
+
+      if(!name || !start || !end){
+        msgEl.innerHTML = `<div class="msg err">Preencha nome, data de retirada e devolução.</div>`;
+        return;
+      }
+      if(end < start){
+        msgEl.innerHTML = `<div class="msg err">A data de devolução não pode ser antes da retirada.</div>`;
+        return;
+      }
+      if(email && !/^\S+@\S+\.\S+$/.test(email)){
+        msgEl.innerHTML = `<div class="msg err">Digite um e-mail válido, ou deixe em branco.</div>`;
+        return;
+      }
+      const conflict = reservations.some(r => r.cameraId===camId && r.status==='approved' && rangesOverlap(r.startDate, r.endDate, start, end));
+
+      const manualRes = {
+        id: uid(), cameraId: camId, studentName: name, email,
+        startDate: start, endDate: end, notes,
+        status: 'approved', requestedAt: new Date().toISOString()
+      };
+      reservations.push(manualRes);
+      await saveReservations();
+      if(email) sendConfirmationEmail(manualRes, 'Retirada registrada ✅', 'Sua retirada do equipamento foi registrada manualmente pela administração.');
+
+      msgEl.innerHTML = conflict
+        ? `<div class="msg warn">Retirada registrada, mas havia outra reserva aprovada sobreposta nesse período — confira o histórico.</div>`
+        : `<div class="msg ok">Retirada registrada com sucesso.</div>`;
+      document.getElementById('m-name').value='';
+      document.getElementById('m-email').value='';
+      document.getElementById('m-notes').value='';
+      renderAdmin(); renderStats();
+    };
+
     document.getElementById('addCam').onclick = async ()=>{
       const nameEl = document.getElementById('newCamName');
       const name = nameEl.value.trim();
