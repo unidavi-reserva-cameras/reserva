@@ -4,20 +4,21 @@
 
 <style>
   :root{
-    --bg:#17140f;
-    --bg-panel:#211d16;
-    --bg-panel-2:#2a2418;
-    --text:#f3ecdd;
-    --text-dim:#b4a991;
-    --accent:#e8a33d;
-    --accent-soft:#3a2f1c;
-    --ok:#5f8a72;
-    --ok-soft:#20281f;
-    --pending:#d9c46a;
-    --pending-soft:#2c2818;
-    --danger:#c1553b;
-    --danger-soft:#2c1c17;
-    --line:#3a342a;
+    --bg:#f4f2ec;
+    --bg-panel:#ffffff;
+    --bg-panel-2:#f7f5ee;
+    --text:#211e19;
+    --text-dim:#726c5f;
+    --accent:#1d4e73;
+    --accent-soft:#e3edf4;
+    --ok:#2f7a52;
+    --ok-soft:#e4f2e9;
+    --pending:#a9760a;
+    --pending-soft:#faf0d9;
+    --danger:#b6392c;
+    --danger-soft:#f9e4e1;
+    --line:#ddd8ca;
+    --on-accent:#ffffff;
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;}
@@ -35,7 +36,7 @@
   /* tabs */
   .tabs{display:flex;gap:2px;margin-bottom:22px;border:1px solid var(--line);border-radius:8px;overflow:hidden;width:fit-content;}
   .tab{font-family:'Barlow Condensed',sans-serif;font-size:16px;letter-spacing:0.5px;text-transform:uppercase;padding:10px 18px;background:var(--bg-panel);color:var(--text-dim);cursor:pointer;border:none;transition:background .15s,color .15s;}
-  .tab.active{background:var(--accent);color:#1c1608;font-weight:600;}
+  .tab.active{background:var(--accent);color:var(--on-accent);font-weight:600;}
   .tab:not(.active):hover{background:var(--bg-panel-2);color:var(--text);}
 
   .panel{background:var(--bg-panel);border:1px solid var(--line);border-radius:10px;padding:22px;}
@@ -80,7 +81,7 @@
   input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
   textarea{resize:vertical;min-height:60px;}
-  .btn{font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:0.5px;font-size:16px;background:var(--accent);color:#1c1608;border:none;border-radius:6px;padding:10px 20px;cursor:pointer;font-weight:600;margin-top:18px;}
+  .btn{font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:0.5px;font-size:16px;background:var(--accent);color:var(--on-accent);border:none;border-radius:6px;padding:10px 20px;cursor:pointer;font-weight:600;margin-top:18px;}
   .btn:hover{filter:brightness(1.08);}
   .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text);}
   .btn.small{font-size:13px;padding:6px 12px;margin-top:0;}
