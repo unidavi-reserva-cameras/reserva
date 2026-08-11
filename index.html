@@ -232,7 +232,7 @@
         start_date: r.startDate,
         end_date: r.endDate,
         status_title: 'Nova solicitação de reserva',
-        status_message: `${r.studentName} (${r.email}) solicitou o equipamento "${camName(r.cameraId)}" para o período de ${r.startDate} até ${r.endDate}. Acesse o link abaixo para aprovar ou recusar.`,
+        status_message: `${r.studentName} (${r.email}), Fase ${r.fase || '—'}, solicitou o equipamento "${camName(r.cameraId)}" para o período de ${r.startDate} até ${r.endDate}. Acesse o link abaixo para aprovar ou recusar.`,
         admin_link: adminLink
       });
     }catch(e){ console.error('Erro ao notificar professor', e); }
@@ -280,6 +280,7 @@
       .map(r => [
         camName(r.cameraId),
         r.studentName || '',
+        r.fase ? ('Fase '+r.fase) : '—',
         r.professorName || '—',
         formatDateBR(r.startDate),
         formatDateBR(r.endDate),
@@ -289,7 +290,7 @@
 
     doc.autoTable({
       startY: 30,
-      head: [['Equipamento','Aluno','Professor','Retirada','Devolução','Status','Devolução real']],
+      head: [['Equipamento','Aluno','Fase','Professor','Retirada','Devolução','Status','Devolução real']],
       body: rows,
       styles: { fontSize: 8, cellPadding: 3 },
       headStyles: { fillColor: [29,78,115] },
@@ -632,6 +633,13 @@
         <input type="text" id="f-name" placeholder="Nome completo">
         <label>Seu e-mail</label>
         <input type="text" id="f-email" placeholder="voce@exemplo.com">
+        <label>Fase do curso</label>
+        <select id="f-fase">
+          <option value="1">Fase 1</option>
+          <option value="2">Fase 2</option>
+          <option value="3">Fase 3</option>
+          <option value="4">Fase 4</option>
+        </select>
         <label>Professor responsável</label>
         <select id="f-professor">
           ${PROFESSORS.map(p=>`<option value="${p.email}">${p.name}</option>`).join('')}
@@ -676,6 +684,7 @@
       const name = document.getElementById('f-name').value.trim();
       const email = document.getElementById('f-email').value.trim();
       const professorEmail = document.getElementById('f-professor').value;
+      const fase = document.getElementById('f-fase').value;
       const professorName = (PROFESSORS.find(p=>p.email===professorEmail)||{}).name || '';
       const camId = document.getElementById('f-camera').value;
       const start = document.getElementById('f-start').value;
@@ -709,7 +718,7 @@
 
       const newRes = {
         id: uid(), cameraId: camId, studentName: name, email,
-        professorEmail, professorName,
+        professorEmail, professorName, fase,
         startDate: start, endDate: end, notes,
         status: 'pending', requestedAt: new Date().toISOString(),
         returned: false, returnedAt: null
@@ -784,7 +793,7 @@
           <div class="req-row">
             <div class="req-main">
               <b>${camName(r.cameraId)}</b> · ${r.studentName} · ${r.email || 'sem e-mail'}
-              <div class="req-meta">${r.startDate} → ${r.endDate}${r.notes ? ' · '+r.notes : ''} · Professor: ${r.professorName || '—'}</div>
+              <div class="req-meta">${r.startDate} → ${r.endDate}${r.notes ? ' · '+r.notes : ''} · Professor: ${r.professorName || '—'}${r.fase ? ' · Fase '+r.fase : ''}</div>
             </div>
             <div class="req-actions">
               <button class="btn small" data-id="${r.id}" data-action="approve">Aprovar</button>
