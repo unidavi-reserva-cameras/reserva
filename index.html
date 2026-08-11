@@ -152,6 +152,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 
 <script>
@@ -172,7 +173,9 @@
 
   firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
+  const auth = firebase.auth();
   const COLLECTION = 'reserva-cameras';
+  const RES_COLLECTION = 'reserva_cameras_reservations';
 
   // =====================================================================
   // 2) COLE AQUI A CONFIGURAÇÃO DO EMAILJS (para o e-mail de confirmação)
@@ -205,28 +208,33 @@
   }
 
   // =====================================================================
-  // 3) E-MAIL DO ADMINISTRADOR — recebe um aviso a cada nova solicitação
+  // 3) PROFESSORES — cada um recebe notificação só das suas solicitações
+  //    e faz login com e-mail + senha (configurado no Firebase Authentication)
   // =====================================================================
-  const ADMIN_EMAIL = "gabrielgarcia@unidavi.edu.br";
+  const PROFESSORS = [
+    { name: "Professor 1", email: "gabrielgarcia@unidavi.edu.br" },
+    { name: "Professor 2", email: "prof.jean.caetano@unidavi.edu.br" },
+    { name: "Professor 3", email: "sandroa@unidavi.edu.br" }
+  ];
   // =====================================================================
 
-  async function notifyAdmin(r){
-    if(!ADMIN_EMAIL) return;
+  async function notifyProfessor(r){
+    if(!r.professorEmail) return;
     if(!window.emailjs || emailjsConfig.publicKey === "SUA_PUBLIC_KEY") return;
+    const adminLink = location.origin + location.pathname + '?admin=1';
     try{
       await emailjs.send(emailjsConfig.serviceId, emailjsConfig.templateId, {
-        to_email: ADMIN_EMAIL,
-        to_name: 'Administrador',
+        to_email: r.professorEmail,
+        to_name: r.professorName || 'Professor(a)',
         camera_name: camName(r.cameraId),
         start_date: r.startDate,
         end_date: r.endDate,
         status_title: 'Nova solicitação de reserva',
-        status_message: `${r.studentName} (${r.email}) solicitou o equipamento "${camName(r.cameraId)}" para o período de ${r.startDate} até ${r.endDate}. Acesse a aba Administração para aprovar ou recusar.`
+        status_message: `${r.studentName} (${r.email}) solicitou o equipamento "${camName(r.cameraId)}" para o período de ${r.startDate} até ${r.endDate}. Acesse o link abaixo para aprovar ou recusar.`,
+        admin_link: adminLink
       });
-    }catch(e){ console.error('Erro ao notificar administrador', e); }
+    }catch(e){ console.error('Erro ao notificar professor', e); }
   }
-
-  const ADMIN_PIN = 'prm@#';
 
   let cameras = [];
   let reservations = [];
@@ -240,7 +248,8 @@
   let modalSelStart = null;
   let modalSelEnd = null;
   let carryOverRequest = null;
-  let adminUnlocked = false;
+  let currentUser = null;
+  let manualFormOpen = false;
   let loaded = false;
 
   const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -257,6 +266,10 @@
     return aStart <= bEnd && bStart <= aEnd;
   }
 
+  function effectiveEnd(r){
+    return (r.returned && r.returnedAt) ? r.returnedAt : r.endDate;
+  }
+
   async function loadState(){
     try{
       const camDoc = await db.collection(COLLECTION).doc('cameras').get();
@@ -267,8 +280,8 @@
       await saveCameras();
     }
     try{
-      const resDoc = await db.collection(COLLECTION).doc('reservations').get();
-      reservations = resDoc.exists ? (resDoc.data().list || []) : [];
+      const snap = await db.collection(RES_COLLECTION).get();
+      reservations = snap.docs.map(d=>d.data());
     }catch(e){ console.error('erro ao carregar reservas', e); reservations = []; }
     loaded = true;
 
@@ -278,8 +291,14 @@
     db.collection(COLLECTION).doc('cameras').onSnapshot(doc=>{
       if(doc.exists){ cameras = doc.data().list || []; if(currentTab==='agenda') render(); }
     });
-    db.collection(COLLECTION).doc('reservations').onSnapshot(doc=>{
-      if(doc.exists){ reservations = doc.data().list || []; if(currentTab==='agenda') render(); }
+    db.collection(RES_COLLECTION).onSnapshot(snap=>{
+      reservations = snap.docs.map(d=>d.data());
+      if(currentTab==='agenda') render();
+    });
+
+    auth.onAuthStateChanged(user=>{
+      currentUser = user;
+      if(currentTab==='admin') renderAdmin();
     });
   }
 
@@ -287,9 +306,17 @@
     try{ await db.collection(COLLECTION).doc('cameras').set({list: cameras}); }
     catch(e){ console.error('erro ao salvar câmeras', e); }
   }
-  async function saveReservations(){
-    try{ await db.collection(COLLECTION).doc('reservations').set({list: reservations}); }
-    catch(e){ console.error('erro ao salvar reservas', e); }
+  async function addReservationDoc(r){
+    try{ await db.collection(RES_COLLECTION).doc(r.id).set(r); }
+    catch(e){ console.error('erro ao criar reserva', e); }
+  }
+  async function updateReservationDoc(id, changes){
+    try{ await db.collection(RES_COLLECTION).doc(id).update(changes); }
+    catch(e){ console.error('erro ao atualizar reserva', e); }
+  }
+  async function deleteReservationDoc(id){
+    try{ await db.collection(RES_COLLECTION).doc(id).delete(); }
+    catch(e){ console.error('erro ao excluir reserva', e); }
   }
 
   function camName(id){
@@ -298,7 +325,7 @@
   }
 
   function isCameraFreeOnDate(camId, dateStr){
-    return !reservations.some(r => r.cameraId===camId && r.status==='approved' && rangesOverlap(r.startDate, r.endDate, dateStr, dateStr));
+    return !reservations.some(r => r.cameraId===camId && r.status==='approved' && rangesOverlap(r.startDate, effectiveEnd(r), dateStr, dateStr));
   }
   function isCameraFreeToday(camId){
     return isCameraFreeOnDate(camId, todayStr());
@@ -400,7 +427,7 @@
   }
 
   function dayStatus(camId, dateStr){
-    const dayRes = reservations.filter(r => r.cameraId===camId && r.status!=='rejected' && rangesOverlap(r.startDate, r.endDate, dateStr, dateStr));
+    const dayRes = reservations.filter(r => r.cameraId===camId && r.status!=='rejected' && rangesOverlap(r.startDate, effectiveEnd(r), dateStr, dateStr));
     if(dayRes.some(r=>r.status==='approved')) return 'booked';
     if(dayRes.some(r=>r.status==='pending')) return 'pendingday';
     return 'freeday';
@@ -530,7 +557,7 @@
   function getAvailableCameras(start, end){
     if(!start || !end) return cameras;
     return cameras.filter(c => !reservations.some(r =>
-      r.cameraId === c.id && r.status === 'approved' && rangesOverlap(r.startDate, r.endDate, start, end)
+      r.cameraId === c.id && r.status === 'approved' && rangesOverlap(r.startDate, effectiveEnd(r), start, end)
     ));
   }
 
@@ -568,6 +595,10 @@
         <input type="text" id="f-name" placeholder="Nome completo">
         <label>Seu e-mail</label>
         <input type="text" id="f-email" placeholder="voce@exemplo.com">
+        <label>Professor responsável</label>
+        <select id="f-professor">
+          ${PROFESSORS.map(p=>`<option value="${p.email}">${p.name}</option>`).join('')}
+        </select>
         <div class="row2">
           <div>
             <label>Retirada</label>
@@ -607,6 +638,8 @@
     document.getElementById('submitReq').onclick = async ()=>{
       const name = document.getElementById('f-name').value.trim();
       const email = document.getElementById('f-email').value.trim();
+      const professorEmail = document.getElementById('f-professor').value;
+      const professorName = (PROFESSORS.find(p=>p.email===professorEmail)||{}).name || '';
       const camId = document.getElementById('f-camera').value;
       const start = document.getElementById('f-start').value;
       const end = document.getElementById('f-end').value;
@@ -630,7 +663,7 @@
         return;
       }
       // Checagem final de conflito (garante mesmo se os dados mudaram entre a digitação e o envio)
-      const conflict = reservations.some(r => r.cameraId===camId && r.status==='approved' && rangesOverlap(r.startDate, r.endDate, start, end));
+      const conflict = reservations.some(r => r.cameraId===camId && r.status==='approved' && rangesOverlap(r.startDate, effectiveEnd(r), start, end));
       if(conflict){
         msgEl.innerHTML = `<div class="msg err">Esse equipamento acabou de ser reservado por outra pessoa nesse período. Escolha outro.</div>`;
         refreshCameraOptions();
@@ -639,13 +672,15 @@
 
       const newRes = {
         id: uid(), cameraId: camId, studentName: name, email,
+        professorEmail, professorName,
         startDate: start, endDate: end, notes,
-        status: 'pending', requestedAt: new Date().toISOString()
+        status: 'pending', requestedAt: new Date().toISOString(),
+        returned: false, returnedAt: null
       };
       reservations.push(newRes);
-      await saveReservations();
+      await addReservationDoc(newRes);
       sendConfirmationEmail(newRes, 'Solicitação recebida', 'Sua solicitação de reserva foi registrada e está aguardando aprovação. Você receberá um novo e-mail assim que ela for avaliada.');
-      notifyAdmin(newRes);
+      notifyProfessor(newRes);
 
       msgEl.innerHTML = `<div class="msg ok">Solicitação enviada! Você vai receber um e-mail de confirmação e outro quando ela for avaliada.</div>`;
       document.getElementById('f-name').value='';
@@ -658,20 +693,42 @@
 
   // ---------- ADMIN VIEW ----------
   function renderAdmin(){
-    if(!adminUnlocked){
+    if(!currentUser){
       document.getElementById('view').innerHTML = `
         <div class="panel pin-gate">
           <h2 class="section-title">Área restrita</h2>
-          <label>PIN de administração</label>
-          <input type="text" id="pinInput" maxlength="8" placeholder="••••">
-          <button class="btn" id="pinSubmit" style="width:100%">Entrar</button>
-          <div id="pinMsg"></div>
+          <label>E-mail</label>
+          <input type="text" id="authEmail" placeholder="professor@unidavi.edu.br">
+          <label>Senha</label>
+          <input type="text" id="authPass" placeholder="Sua senha" style="letter-spacing:normal;">
+          <button class="btn" id="authSubmit" style="width:100%">Entrar</button>
+          <button class="btn ghost small" id="forgotPass" style="width:100%;margin-top:8px;">Esqueci minha senha</button>
+          <div id="authMsg"></div>
         </div>
       `;
-      document.getElementById('pinSubmit').onclick = ()=>{
-        const val = document.getElementById('pinInput').value.trim();
-        if(val === ADMIN_PIN){ adminUnlocked = true; renderAdmin(); }
-        else document.getElementById('pinMsg').innerHTML = `<div class="msg err">PIN incorreto.</div>`;
+      document.getElementById('authEmail').type = 'email';
+      document.getElementById('authPass').type = 'password';
+      document.getElementById('authSubmit').onclick = async ()=>{
+        const email = document.getElementById('authEmail').value.trim();
+        const pass = document.getElementById('authPass').value;
+        const msgEl = document.getElementById('authMsg');
+        try{
+          await auth.signInWithEmailAndPassword(email, pass);
+          // onAuthStateChanged cuida de re-renderizar
+        }catch(e){
+          msgEl.innerHTML = `<div class="msg err">Não foi possível entrar: e-mail ou senha incorretos.</div>`;
+        }
+      };
+      document.getElementById('forgotPass').onclick = async ()=>{
+        const email = document.getElementById('authEmail').value.trim();
+        const msgEl = document.getElementById('authMsg');
+        if(!email){ msgEl.innerHTML = `<div class="msg err">Digite seu e-mail acima primeiro.</div>`; return; }
+        try{
+          await auth.sendPasswordResetEmail(email);
+          msgEl.innerHTML = `<div class="msg ok">Enviamos um e-mail com um link para você definir sua senha.</div>`;
+        }catch(e){
+          msgEl.innerHTML = `<div class="msg err">Não foi possível enviar o e-mail. Confira se o endereço está certo.</div>`;
+        }
       };
       return;
     }
@@ -681,12 +738,16 @@
 
     document.getElementById('view').innerHTML = `
       <div class="panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+          <h2 class="section-title" style="margin:0;">Olá, ${currentUser.email}</h2>
+          <button class="btn ghost small" id="logoutBtn">Sair</button>
+        </div>
         <h2 class="section-title">Solicitações pendentes (${pending.length})</h2>
         ${pending.length ? pending.map(r=>`
           <div class="req-row">
             <div class="req-main">
               <b>${camName(r.cameraId)}</b> · ${r.studentName} · ${r.email || 'sem e-mail'}
-              <div class="req-meta">${r.startDate} → ${r.endDate}${r.notes ? ' · '+r.notes : ''}</div>
+              <div class="req-meta">${r.startDate} → ${r.endDate}${r.notes ? ' · '+r.notes : ''} · Professor: ${r.professorName || '—'}</div>
             </div>
             <div class="req-actions">
               <button class="btn small" data-id="${r.id}" data-action="approve">Aprovar</button>
@@ -698,30 +759,37 @@
       </div>
 
       <div class="panel">
-        <h2 class="section-title">Registrar retirada manual</h2>
-        <div class="req-meta" style="margin-bottom:10px;">Para retiradas feitas fora do sistema (ex: direto com a coordenação). Datas passadas são permitidas e a reserva já entra como aprovada.</div>
-        <label>Nome do aluno</label>
-        <input type="text" id="m-name" placeholder="Nome completo">
-        <label>E-mail (opcional)</label>
-        <input type="text" id="m-email" placeholder="voce@exemplo.com">
-        <label>Equipamento</label>
-        <select id="m-camera">
-          ${cameras.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}
-        </select>
-        <div class="row2">
-          <div>
-            <label>Retirada</label>
-            <input type="date" id="m-start">
+        ${manualFormOpen ? `
+          <h2 class="section-title">Registrar retirada manual</h2>
+          <div class="req-meta" style="margin-bottom:10px;">Para retiradas feitas fora do sistema (ex: direto com a coordenação). Datas passadas são permitidas e a reserva já entra como aprovada, associada a você.</div>
+          <label>Nome do aluno</label>
+          <input type="text" id="m-name" placeholder="Nome completo">
+          <label>E-mail (opcional)</label>
+          <input type="text" id="m-email" placeholder="voce@exemplo.com">
+          <label>Equipamento</label>
+          <select id="m-camera">
+            ${cameras.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}
+          </select>
+          <div class="row2">
+            <div>
+              <label>Retirada</label>
+              <input type="date" id="m-start">
+            </div>
+            <div>
+              <label>Devolução</label>
+              <input type="date" id="m-end">
+            </div>
           </div>
-          <div>
-            <label>Devolução</label>
-            <input type="date" id="m-end">
+          <label>Observações (opcional)</label>
+          <textarea id="m-notes" placeholder="Ex: retirada direto com a coordenação por urgência"></textarea>
+          <div style="display:flex;gap:8px;">
+            <button class="btn" id="submitManual">Registrar retirada</button>
+            <button class="btn ghost" id="cancelManual">Cancelar</button>
           </div>
-        </div>
-        <label>Observações (opcional)</label>
-        <textarea id="m-notes" placeholder="Ex: retirada direto com a coordenação por urgência"></textarea>
-        <button class="btn" id="submitManual">Registrar retirada</button>
-        <div id="manualMsg"></div>
+          <div id="manualMsg"></div>
+        ` : `
+          <button class="btn ghost" id="openManual" style="margin-top:0;width:100%;">+ Registrar retirada manual</button>
+        `}
       </div>
 
       <div class="panel">
@@ -730,9 +798,10 @@
           <div class="req-row">
             <div class="req-main">
               <b>${camName(r.cameraId)}</b> · ${r.studentName}
-              <div class="req-meta">${r.startDate} → ${r.endDate} · <span style="color:${r.status==='approved'?'var(--ok)':'var(--danger)'}">${r.status==='approved'?'aprovada':'recusada'}</span></div>
+              <div class="req-meta">${r.startDate} → ${r.endDate} · <span style="color:${r.status==='approved'?'var(--ok)':'var(--danger)'}">${r.status==='approved'?'aprovada':'recusada'}</span>${r.status==='approved' ? (r.returned ? ` · devolvida em ${r.returnedAt}` : ' · em posse do aluno') : ''}</div>
             </div>
             <div class="req-actions">
+              ${(r.status==='approved' && !r.returned) ? `<button class="btn small ghost" data-id="${r.id}" data-action="return">Marcar como devolvida</button>` : ''}
               <button class="btn small ghost" data-id="${r.id}" data-action="delete">Excluir</button>
             </div>
           </div>
@@ -771,6 +840,8 @@
       inp.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ inp.blur(); } });
     });
 
+    document.getElementById('logoutBtn').onclick = ()=> auth.signOut();
+
     document.getElementById('view').querySelectorAll('[data-action]').forEach(btn=>{
       btn.onclick = async ()=>{
         const r = reservations.find(x=>x.id===btn.dataset.id);
@@ -779,20 +850,28 @@
         if(btn.dataset.action==='delete'){
           if(!confirm(`Excluir a reserva de ${r.studentName} (${camName(r.cameraId)}, ${r.startDate} → ${r.endDate})? Essa ação não pode ser desfeita.`)) return;
           reservations = reservations.filter(x=>x.id!==r.id);
-          await saveReservations();
+          await deleteReservationDoc(r.id);
+          renderAdmin(); renderStats();
+          return;
+        }
+
+        if(btn.dataset.action==='return'){
+          r.returned = true;
+          r.returnedAt = todayStr();
+          await updateReservationDoc(r.id, { returned: true, returnedAt: r.returnedAt });
           renderAdmin(); renderStats();
           return;
         }
 
         if(btn.dataset.action==='approve'){
-          const conflict = reservations.some(o => o.id!==r.id && o.cameraId===r.cameraId && o.status==='approved' && rangesOverlap(o.startDate, o.endDate, r.startDate, r.endDate));
+          const conflict = reservations.some(o => o.id!==r.id && o.cameraId===r.cameraId && o.status==='approved' && rangesOverlap(o.startDate, effectiveEnd(o), r.startDate, r.endDate));
           if(conflict){
             alert('Não é possível aprovar: esse equipamento já tem outra reserva aprovada que se sobrepõe a este período. Recuse este pedido ou ajuste a outra reserva primeiro.');
             return;
           }
         }
         r.status = btn.dataset.action==='approve' ? 'approved' : 'rejected';
-        await saveReservations();
+        await updateReservationDoc(r.id, { status: r.status });
         if(r.status==='approved'){
           sendConfirmationEmail(r, 'Reserva aprovada ✅', 'Sua reserva foi aprovada! Pode retirar o equipamento na data combinada.');
         }else{
@@ -802,7 +881,13 @@
       };
     });
 
-    document.getElementById('submitManual').onclick = async ()=>{
+    const openManualBtn = document.getElementById('openManual');
+    if(openManualBtn) openManualBtn.onclick = ()=>{ manualFormOpen = true; renderAdmin(); };
+    const cancelManualBtn = document.getElementById('cancelManual');
+    if(cancelManualBtn) cancelManualBtn.onclick = ()=>{ manualFormOpen = false; renderAdmin(); };
+
+    const submitManualBtn = document.getElementById('submitManual');
+    if(submitManualBtn) submitManualBtn.onclick = async ()=>{
       const name = document.getElementById('m-name').value.trim();
       const email = document.getElementById('m-email').value.trim();
       const camId = document.getElementById('m-camera').value;
@@ -823,23 +908,24 @@
         msgEl.innerHTML = `<div class="msg err">Digite um e-mail válido, ou deixe em branco.</div>`;
         return;
       }
-      const conflict = reservations.some(r => r.cameraId===camId && r.status==='approved' && rangesOverlap(r.startDate, r.endDate, start, end));
+      const conflict = reservations.some(r => r.cameraId===camId && r.status==='approved' && rangesOverlap(r.startDate, effectiveEnd(r), start, end));
 
+      const professorEntry = PROFESSORS.find(p=>p.email.toLowerCase()===(currentUser.email||'').toLowerCase());
       const manualRes = {
         id: uid(), cameraId: camId, studentName: name, email,
+        professorEmail: currentUser.email, professorName: professorEntry ? professorEntry.name : currentUser.email,
         startDate: start, endDate: end, notes,
-        status: 'approved', requestedAt: new Date().toISOString()
+        status: 'approved', requestedAt: new Date().toISOString(),
+        returned: false, returnedAt: null
       };
       reservations.push(manualRes);
-      await saveReservations();
+      await addReservationDoc(manualRes);
       if(email) sendConfirmationEmail(manualRes, 'Retirada registrada ✅', 'Sua retirada do equipamento foi registrada manualmente pela administração.');
 
       msgEl.innerHTML = conflict
         ? `<div class="msg warn">Retirada registrada, mas havia outra reserva aprovada sobreposta nesse período — confira o histórico.</div>`
         : `<div class="msg ok">Retirada registrada com sucesso.</div>`;
-      document.getElementById('m-name').value='';
-      document.getElementById('m-email').value='';
-      document.getElementById('m-notes').value='';
+      manualFormOpen = false;
       renderAdmin(); renderStats();
     };
 
@@ -881,6 +967,11 @@
   });
 
   (async ()=>{
+    if(new URLSearchParams(location.search).get('admin')==='1'){
+      currentTab = 'admin';
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      document.querySelector('.tab[data-tab="admin"]').classList.add('active');
+    }
     render();
     await loadState();
     render();
