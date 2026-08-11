@@ -101,8 +101,8 @@
   .req-actions{display:flex;gap:8px;}
   .empty-note{color:var(--text-dim);font-size:13px;padding:20px 4px;text-align:center;font-family:'IBM Plex Mono',monospace;}
 
-  .pin-gate{max-width:260px;margin:20px auto;text-align:center;}
-  .pin-gate input{text-align:center;letter-spacing:6px;font-family:'IBM Plex Mono',monospace;font-size:20px;}
+  .auth-gate{max-width:320px;margin:20px auto;text-align:center;}
+  .auth-gate input{text-align:left;font-family:'Inter',sans-serif;font-size:14px;}
 
   .admin-manage{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
   .cam-tag{display:flex;align-items:center;gap:6px;background:var(--bg-panel-2);border:1px solid var(--line);border-radius:20px;padding:5px 6px 5px 12px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
@@ -212,9 +212,9 @@
   //    e faz login com e-mail + senha (configurado no Firebase Authentication)
   // =====================================================================
   const PROFESSORS = [
-    { name: "Professor 1", email: "gabrielgarcia@unidavi.edu.br" },
-    { name: "Professor 2", email: "prof.jean.caetano@unidavi.edu.br" },
-    { name: "Professor 3", email: "sandroa@unidavi.edu.br" }
+    { name: "Gabriel Garcia", email: "gabrielgarcia@unidavi.edu.br" },
+    { name: "Jean Caetano", email: "prof.jean.caetano@unidavi.edu.br" },
+    { name: "Sandro Andrade", email: "sandroa@unidavi.edu.br" }
   ];
   // =====================================================================
 
@@ -695,7 +695,7 @@
   function renderAdmin(){
     if(!currentUser){
       document.getElementById('view').innerHTML = `
-        <div class="panel pin-gate">
+        <div class="panel auth-gate">
           <h2 class="section-title">Área restrita</h2>
           <label>E-mail</label>
           <input type="text" id="authEmail" placeholder="professor@unidavi.edu.br">
