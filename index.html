@@ -154,6 +154,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 
 <script>
 (function(){
@@ -260,6 +262,41 @@
   function formatDateBR(dateStr){
     const [y,m,d] = dateStr.split('-');
     return `${d}/${m}/${y}`;
+  }
+
+  function exportHistoryPDF(){
+    if(!window.jspdf){ alert('A biblioteca de PDF ainda não carregou. Aguarde um instante e tente de novo.'); return; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    doc.setFontSize(16);
+    doc.text('Histórico de Retiradas — Reserva de Câmeras', 14, 18);
+    doc.setFontSize(10);
+    doc.setTextColor(120);
+    doc.text('Gerado em ' + new Date().toLocaleString('pt-BR'), 14, 24);
+
+    const rows = [...reservations]
+      .sort((a,b)=> b.startDate.localeCompare(a.startDate))
+      .map(r => [
+        camName(r.cameraId),
+        r.studentName || '',
+        r.professorName || '—',
+        formatDateBR(r.startDate),
+        formatDateBR(r.endDate),
+        r.status==='approved' ? 'Aprovada' : r.status==='pending' ? 'Pendente' : 'Recusada',
+        r.returned ? ('Devolvida em ' + formatDateBR(r.returnedAt)) : (r.status==='approved' ? 'Em posse do aluno' : '—')
+      ]);
+
+    doc.autoTable({
+      startY: 30,
+      head: [['Equipamento','Aluno','Professor','Retirada','Devolução','Status','Devolução real']],
+      body: rows,
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [29,78,115] },
+      alternateRowStyles: { fillColor: [245,243,236] }
+    });
+
+    doc.save('historico-retiradas-cameras.pdf');
   }
 
   function rangesOverlap(aStart,aEnd,bStart,bEnd){
@@ -793,7 +830,10 @@
       </div>
 
       <div class="panel">
-        <h2 class="section-title">Histórico recente</h2>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+          <h2 class="section-title" style="margin:0;">Histórico recente</h2>
+          <button class="btn ghost small" id="exportPdfBtn">Exportar PDF</button>
+        </div>
         ${decided.length ? decided.map(r=>`
           <div class="req-row">
             <div class="req-main">
@@ -841,6 +881,7 @@
     });
 
     document.getElementById('logoutBtn').onclick = ()=> auth.signOut();
+    document.getElementById('exportPdfBtn').onclick = exportHistoryPDF;
 
     document.getElementById('view').querySelectorAll('[data-action]').forEach(btn=>{
       btn.onclick = async ()=>{
