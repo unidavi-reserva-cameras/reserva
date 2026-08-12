@@ -812,6 +812,13 @@
           <input type="text" id="m-name" placeholder="Nome completo">
           <label>E-mail (opcional)</label>
           <input type="text" id="m-email" placeholder="voce@exemplo.com">
+          <label>Fase do curso</label>
+          <select id="m-fase">
+            <option value="1">Fase 1</option>
+            <option value="2">Fase 2</option>
+            <option value="3">Fase 3</option>
+            <option value="4">Fase 4</option>
+          </select>
           <label>Equipamento</label>
           <select id="m-camera">
             ${cameras.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}
@@ -850,7 +857,10 @@
               <div class="req-meta">${r.startDate} → ${r.endDate} · <span style="color:${r.status==='approved'?'var(--ok)':'var(--danger)'}">${r.status==='approved'?'aprovada':'recusada'}</span>${r.status==='approved' ? (r.returned ? ` · devolvida em ${r.returnedAt}` : ' · em posse do aluno') : ''}</div>
             </div>
             <div class="req-actions">
-              ${(r.status==='approved' && !r.returned) ? `<button class="btn small ghost" data-id="${r.id}" data-action="return">Marcar como devolvida</button>` : ''}
+              ${(r.status==='approved' && !r.returned) ? `
+                <button class="btn small ghost" data-id="${r.id}" data-action="return-ontime">Devolvida no prazo</button>
+                <button class="btn small ghost" data-id="${r.id}" data-action="return-late">Devolvida em atraso</button>
+              ` : ''}
               <button class="btn small ghost" data-id="${r.id}" data-action="delete">Excluir</button>
             </div>
           </div>
@@ -905,10 +915,24 @@
           return;
         }
 
-        if(btn.dataset.action==='return'){
+        if(btn.dataset.action==='return-ontime'){
           r.returned = true;
-          r.returnedAt = todayStr();
+          r.returnedAt = r.endDate; // devolvido conforme combinado
           await updateReservationDoc(r.id, { returned: true, returnedAt: r.returnedAt });
+          renderAdmin(); renderStats();
+          return;
+        }
+
+        if(btn.dataset.action==='return-late'){
+          const input = prompt('Informe a data real em que o equipamento foi devolvido (AAAA-MM-DD):', todayStr());
+          if(!input) return;
+          if(!/^\d{4}-\d{2}-\d{2}$/.test(input)){
+            alert('Data inválida. Use o formato AAAA-MM-DD, por exemplo 2026-08-11.');
+            return;
+          }
+          r.returned = true;
+          r.returnedAt = input;
+          await updateReservationDoc(r.id, { returned: true, returnedAt: input });
           renderAdmin(); renderStats();
           return;
         }
@@ -940,6 +964,7 @@
     if(submitManualBtn) submitManualBtn.onclick = async ()=>{
       const name = document.getElementById('m-name').value.trim();
       const email = document.getElementById('m-email').value.trim();
+      const fase = document.getElementById('m-fase').value;
       const camId = document.getElementById('m-camera').value;
       const start = document.getElementById('m-start').value;
       const end = document.getElementById('m-end').value;
@@ -963,7 +988,7 @@
       const professorEntry = PROFESSORS.find(p=>p.email.toLowerCase()===(currentUser.email||'').toLowerCase());
       const manualRes = {
         id: uid(), cameraId: camId, studentName: name, email,
-        professorEmail: currentUser.email, professorName: professorEntry ? professorEntry.name : currentUser.email,
+        professorEmail: currentUser.email, professorName: professorEntry ? professorEntry.name : currentUser.email, fase,
         startDate: start, endDate: end, notes,
         status: 'approved', requestedAt: new Date().toISOString(),
         returned: false, returnedAt: null
