@@ -397,7 +397,7 @@
     for(let i=0;i<startDow;i++) cells += '<div class="cal-day empty"></div>';
     for(let d=1; d<=daysInMonth; d++){
       const dateStr = calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-      const dayRes = reservations.filter(r => r.status!=='rejected' && rangesOverlap(r.startDate, r.endDate, dateStr, dateStr));
+      const dayRes = reservations.filter(r => r.status!=='rejected' && rangesOverlap(r.startDate, effectiveEnd(r), dateStr, dateStr));
       const isToday = dateStr === today;
       const isSelected = dateStr === agendaSelectedDate;
       let chips = dayRes.slice(0,3).map(r => `<div class="cal-chip ${r.status==='pending'?'pending':''}" title="${camName(r.cameraId)} — ${r.studentName}">${camName(r.cameraId)}</div>`).join('');
@@ -417,6 +417,24 @@
         </div>
         <div class="cal-grid">${dow}${cells}</div>
       </div>
+      <div class="panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+          <h2 class="section-title" style="margin:0;">Reservas em ${agendaSelectedDate===today ? 'hoje' : formatDateBR(agendaSelectedDate)}</h2>
+        </div>
+        ${(()=>{
+          const dayResList = reservations.filter(r => r.status!=='rejected' && rangesOverlap(r.startDate, effectiveEnd(r), agendaSelectedDate, agendaSelectedDate));
+          if(!dayResList.length) return `<div class="empty-note">Nenhuma reserva nesse dia.</div>`;
+          return dayResList.map(r => `
+            <div class="req-row">
+              <div class="req-main">
+                <b>${camName(r.cameraId)}</b> · ${r.studentName}
+                <div class="req-meta">${formatDateBR(r.startDate)} → ${formatDateBR(r.endDate)} · <span style="color:${r.status==='approved'?'var(--ok)':'var(--pending)'}">${r.status==='approved'?'aprovada':'pendente'}</span>${r.professorName ? ' · Professor: '+r.professorName : ''}${r.fase ? ' · Fase '+r.fase : ''}</div>
+              </div>
+            </div>
+          `).join('');
+        })()}
+      </div>
+
       <div class="panel">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
           <h2 class="section-title" style="margin:0;">Equipamentos — ${agendaSelectedDate===today ? 'Hoje' : formatDateBR(agendaSelectedDate)}</h2>
@@ -793,7 +811,7 @@
           <div class="req-row">
             <div class="req-main">
               <b>${camName(r.cameraId)}</b> · ${r.studentName} · ${r.email || 'sem e-mail'}
-              <div class="req-meta">${r.startDate} → ${r.endDate}${r.notes ? ' · '+r.notes : ''} · Professor: ${r.professorName || '—'}${r.fase ? ' · Fase '+r.fase : ''}</div>
+              <div class="req-meta">${formatDateBR(r.startDate)} → ${formatDateBR(r.endDate)}${r.notes ? ' · '+r.notes : ''} · Professor: ${r.professorName || '—'}${r.fase ? ' · Fase '+r.fase : ''}</div>
             </div>
             <div class="req-actions">
               <button class="btn small" data-id="${r.id}" data-action="approve">Aprovar</button>
@@ -854,7 +872,7 @@
           <div class="req-row">
             <div class="req-main">
               <b>${camName(r.cameraId)}</b> · ${r.studentName}
-              <div class="req-meta">${r.startDate} → ${r.endDate} · <span style="color:${r.status==='approved'?'var(--ok)':'var(--danger)'}">${r.status==='approved'?'aprovada':'recusada'}</span>${r.status==='approved' ? (r.returned ? ` · devolvida em ${r.returnedAt}` : ' · em posse do aluno') : ''}</div>
+              <div class="req-meta">${formatDateBR(r.startDate)} → ${formatDateBR(r.endDate)} · <span style="color:${r.status==='approved'?'var(--ok)':'var(--danger)'}">${r.status==='approved'?'aprovada':'recusada'}</span>${r.status==='approved' ? (r.returned ? ` · devolvida em ${formatDateBR(r.returnedAt)}` : ' · em posse do aluno') : ''}</div>
             </div>
             <div class="req-actions">
               ${(r.status==='approved' && !r.returned) ? `
@@ -908,7 +926,7 @@
         if(!r) return;
 
         if(btn.dataset.action==='delete'){
-          if(!confirm(`Excluir a reserva de ${r.studentName} (${camName(r.cameraId)}, ${r.startDate} → ${r.endDate})? Essa ação não pode ser desfeita.`)) return;
+          if(!confirm(`Excluir a reserva de ${r.studentName} (${camName(r.cameraId)}, ${formatDateBR(r.startDate)} → ${formatDateBR(r.endDate)})? Essa ação não pode ser desfeita.`)) return;
           reservations = reservations.filter(x=>x.id!==r.id);
           await deleteReservationDoc(r.id);
           renderAdmin(); renderStats();
