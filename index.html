@@ -1,24 +1,30 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Reserva de Câmeras</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 
 <style>
   :root{
-    --bg:#f4f2ec;
-    --bg-panel:#ffffff;
-    --bg-panel-2:#f7f5ee;
-    --text:#211e19;
-    --text-dim:#726c5f;
-    --accent:#1d4e73;
-    --accent-soft:#e3edf4;
-    --ok:#2f7a52;
-    --ok-soft:#e4f2e9;
-    --pending:#a9760a;
-    --pending-soft:#faf0d9;
-    --danger:#b6392c;
-    --danger-soft:#f9e4e1;
-    --line:#ddd8ca;
-    --on-accent:#ffffff;
+    --bg:#17140f;
+    --bg-panel:#211d16;
+    --bg-panel-2:#2a2418;
+    --text:#f3ecdd;
+    --text-dim:#b4a991;
+    --accent:#e8a33d;
+    --accent-soft:#3a2f1c;
+    --ok:#5f8a72;
+    --ok-soft:#20281f;
+    --pending:#d9c46a;
+    --pending-soft:#2c2818;
+    --danger:#c1553b;
+    --danger-soft:#2c1c17;
+    --line:#3a342a;
+    --on-accent:#1c1608;
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;}
@@ -108,10 +114,17 @@
   .cam-tag{display:flex;align-items:center;gap:6px;background:var(--bg-panel-2);border:1px solid var(--line);border-radius:20px;padding:5px 6px 5px 12px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
   .cam-tag button{background:none;border:none;color:var(--danger);cursor:pointer;font-size:13px;padding:0 4px;}
 
+  html, body{overflow-x:hidden;}
   @media(max-width:640px){
+    body{font-size:14px;}
+    .app{padding:16px 12px 40px;}
+    .masthead h1{font-size:28px;}
+    .tab{padding:9px 12px;font-size:14px;}
+    .stats .n{font-size:18px;}
     .row2{grid-template-columns:1fr;}
-    .cal-day{min-height:56px;}
-    .cal-chip{font-size:8px;}
+    .cal-day{min-height:48px;padding:3px;}
+    .cal-chip{font-size:7px;padding:0 2px;}
+    .cam-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));}
   }
 
   /* modal de disponibilidade */
@@ -130,6 +143,8 @@
   .legend-dot.booked{background:var(--danger-soft);border-color:var(--danger);}
   .legend-dot.pendingday{background:var(--pending-soft);border-color:var(--pending);}
 </style>
+</head>
+<body>
 
 <div class="app" id="app">
   <div class="masthead">
@@ -1071,3 +1086,5 @@
   })();
 })();
 </script>
+</body>
+</html>
