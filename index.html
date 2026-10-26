@@ -6,65 +6,72 @@
 <title>Reserva de Câmeras</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Krona+One&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
 
 <style>
+  /* Tema claro, nas cores do site da AME (índigo #10054D e lilás #9284E3).
+     Fontes: Krona One faz o papel da Lulo Clean dos títulos do site; Figtree, da Avenir. */
   :root{
-    --bg:#17140f;
-    --bg-panel:#211d16;
-    --bg-panel-2:#2a2418;
-    --text:#f3ecdd;
-    --text-dim:#b4a991;
-    --accent:#e8a33d;
-    --accent-soft:#3a2f1c;
-    --ok:#5f8a72;
-    --ok-soft:#20281f;
-    --pending:#d9c46a;
-    --pending-soft:#2c2818;
-    --danger:#c1553b;
-    --danger-soft:#2c1c17;
-    --line:#3a342a;
-    --on-accent:#1c1608;
+    --font-display:"Krona One",sans-serif;
+    --font-body:"Figtree",sans-serif;
+    --font-ui:"Figtree",sans-serif;
+    --bg:#f5f4fb;
+    --bg-panel:#ffffff;
+    --bg-panel-2:#f3f1fb;
+    --text:#10054d;
+    --text-dim:#5f5a80;
+    --accent:#10054d;
+    --accent-2:#9284e3;
+    --accent-soft:#e7e3fb;
+    --ok:#1d7a52;
+    --ok-soft:#e2f4ea;
+    --pending:#9a6200;
+    --pending-soft:#fdf0d5;
+    --danger:#c0392b;
+    --danger-soft:#fce6e3;
+    --line:#dedbf0;
+    --on-accent:#ffffff;
   }
   *{box-sizing:border-box;}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);}
   .app{max-width:1000px;margin:0 auto;padding:28px 20px 60px;}
 
   /* header */
   .masthead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:22px;}
-  .masthead h1{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:38px;letter-spacing:0.5px;margin:0;text-transform:uppercase;}
-  .masthead .sub{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text-dim);margin-top:4px;letter-spacing:0.5px;}
-  .stats{display:flex;gap:18px;font-family:'IBM Plex Mono',monospace;}
+  .masthead h1{font-family:var(--font-display);font-weight:400;font-size:28px;letter-spacing:1.5px;line-height:1.25;margin:0;text-transform:uppercase;}
+  .masthead .sub{font-family:var(--font-ui);font-size:13px;color:var(--text-dim);margin-top:6px;}
+  .stats{display:flex;gap:18px;font-family:var(--font-ui);}
   .stat{text-align:right;}
-  .stat .n{font-size:22px;color:var(--accent);font-weight:500;}
+  .stat .n{font-size:24px;color:var(--accent);font-weight:700;}
   .stat .l{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;}
 
   /* tabs */
   .tabs{display:flex;gap:2px;margin-bottom:22px;border:1px solid var(--line);border-radius:8px;overflow:hidden;width:fit-content;}
-  .tab{font-family:'Barlow Condensed',sans-serif;font-size:16px;letter-spacing:0.5px;text-transform:uppercase;padding:10px 18px;background:var(--bg-panel);color:var(--text-dim);cursor:pointer;border:none;transition:background .15s,color .15s;}
-  .tab.active{background:var(--accent);color:var(--on-accent);font-weight:600;}
+  .tab{font-family:var(--font-display);font-size:11px;letter-spacing:1.5px;text-transform:uppercase;padding:10px 18px;background:var(--bg-panel);color:var(--text-dim);cursor:pointer;border:none;transition:background .15s,color .15s;}
+  .tab.active{background:var(--accent);color:var(--on-accent);}
   .tab:not(.active):hover{background:var(--bg-panel-2);color:var(--text);}
 
-  .panel{background:var(--bg-panel);border:1px solid var(--line);border-radius:10px;padding:22px;}
+  .panel{background:var(--bg-panel);border:1px solid var(--line);border-radius:12px;padding:22px;box-shadow:0 1px 3px rgba(16,5,77,0.06);}
   .panel + .panel{margin-top:16px;}
 
   /* film sprocket strip */
   .sprockets{display:flex;gap:6px;padding:0 2px 14px;}
-  .sprockets span{width:6px;height:6px;border-radius:1px;background:var(--line);}
+  .sprockets span{width:6px;height:6px;border-radius:1px;background:var(--accent-soft);}
 
-  h2.section-title{font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:0.5px;font-size:20px;margin:0 0 14px;color:var(--text);}
+  h2.section-title{font-family:var(--font-display);font-weight:400;text-transform:uppercase;letter-spacing:1px;font-size:14px;line-height:1.4;margin:0 0 14px;color:var(--text);}
 
   /* calendar */
   .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
-  .cal-nav button{background:none;border:1px solid var(--line);color:var(--text);border-radius:6px;padding:6px 12px;font-family:'IBM Plex Mono',monospace;cursor:pointer;}
+  .cal-nav{gap:8px;}
+  .cal-nav button{white-space:nowrap;background:none;border:1px solid var(--line);color:var(--text);border-radius:6px;padding:6px 12px;font-family:var(--font-ui);cursor:pointer;}
   .cal-nav button:hover{border-color:var(--accent);color:var(--accent);}
-  .cal-month{font-family:'Barlow Condensed',sans-serif;font-size:22px;text-transform:uppercase;letter-spacing:1px;}
-  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;}
-  .cal-dow{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-dim);text-align:center;padding-bottom:4px;text-transform:uppercase;}
+  .cal-month{font-family:var(--font-display);font-size:14px;text-transform:uppercase;letter-spacing:1px;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;}
+  .cal-dow{font-family:var(--font-ui);font-size:10px;color:var(--text-dim);text-align:center;padding-bottom:4px;text-transform:uppercase;}
   .cal-day{min-height:78px;border:1px solid var(--line);border-radius:6px;padding:5px 5px;background:var(--bg-panel-2);position:relative;}
   .cal-day.empty{background:transparent;border-color:transparent;}
-  .cal-day .dnum{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim);}
-  .cal-day.today .dnum{color:var(--accent);font-weight:600;}
+  .cal-day .dnum{display:inline-block;font-family:var(--font-ui);font-size:11px;color:var(--text-dim);}
+  .cal-day.today .dnum{color:var(--on-accent);background:var(--accent-2);border-radius:10px;padding:0 6px;font-weight:700;}
   .cal-day.selected{outline:2px solid var(--accent);outline-offset:-2px;}
   .cal-chip{font-size:10px;line-height:1.3;background:var(--danger-soft);color:var(--danger);border-left:2px solid var(--danger);border-radius:3px;padding:1px 4px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default;}
   .cal-chip.pending{background:var(--pending-soft);color:var(--pending);border-color:var(--pending);}
@@ -72,29 +79,30 @@
   /* camera cards */
   .cam-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;}
   .cam-card{border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--bg-panel-2);position:relative;cursor:pointer;transition:border-color .15s;}
-  .cam-card:hover{border-color:var(--accent);}
+  .cam-card:hover{border-color:var(--accent-2);}
   .cam-card .iris{width:16px;height:16px;border-radius:50%;border:2px solid var(--text-dim);position:absolute;top:12px;right:12px;transition:transform .2s, border-color .2s;}
-  .cam-card:hover .iris{transform:scale(0.7);border-color:var(--accent);}
-  .cam-card .name{font-family:'Barlow Condensed',sans-serif;font-size:18px;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:6px;padding-right:22px;}
-  .badge{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;padding:2px 7px;border-radius:20px;}
+  .cam-card:hover .iris{transform:scale(0.7);border-color:var(--accent-2);}
+  .cam-card .name{font-family:var(--font-display);font-size:12px;line-height:1.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;padding-right:22px;}
+  .badge{display:inline-block;font-family:var(--font-ui);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;padding:2px 7px;border-radius:20px;}
   .badge.free{background:var(--ok-soft);color:var(--ok);}
   .badge.busy{background:var(--danger-soft);color:var(--danger);}
   .badge.late{background:var(--danger);color:#fff;font-weight:600;}
 
   /* form */
-  label{display:block;font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-dim);margin-bottom:5px;margin-top:14px;}
+  label{display:block;font-family:var(--font-ui);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);margin-bottom:5px;margin-top:14px;}
   label:first-child{margin-top:0;}
-  input[type=text],input[type=date],select,textarea{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:9px 10px;font-family:'Inter',sans-serif;font-size:14px;}
-  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);}
+  input[type=text],input[type=email],input[type=password],input[type=date],select,textarea{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:9px 10px;font-family:var(--font-body);font-size:14px;}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent-2);box-shadow:0 0 0 3px var(--accent-soft);}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
   textarea{resize:vertical;min-height:60px;}
-  .btn{font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:0.5px;font-size:16px;background:var(--accent);color:var(--on-accent);border:none;border-radius:6px;padding:10px 20px;cursor:pointer;font-weight:600;margin-top:18px;}
-  .btn:hover{filter:brightness(1.08);}
+  .btn{font-family:var(--font-ui);text-transform:uppercase;letter-spacing:1px;font-size:14px;background:var(--accent);color:var(--on-accent);border:none;border-radius:6px;padding:10px 20px;cursor:pointer;font-weight:600;margin-top:18px;}
+  .btn:hover{filter:brightness(1.25);}
+  .btn.ghost:hover{filter:none;border-color:var(--accent-2);}
   .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text);}
-  .btn.small{font-size:13px;padding:6px 12px;margin-top:0;}
+  .btn.small{font-size:12px;padding:6px 12px;margin-top:0;}
   .btn.danger{background:var(--danger);color:#fff;}
   .btn:disabled{opacity:0.4;cursor:not-allowed;}
-  .msg{font-family:'IBM Plex Mono',monospace;font-size:12px;margin-top:12px;padding:8px 10px;border-radius:6px;}
+  .msg{font-family:var(--font-ui);font-size:13px;margin-top:12px;padding:8px 10px;border-radius:6px;}
   .msg.ok{background:var(--ok-soft);color:var(--ok);}
   .msg.warn{background:var(--pending-soft);color:var(--pending);}
   .msg.err{background:var(--danger-soft);color:var(--danger);}
@@ -105,46 +113,53 @@
   .req-row.late{border-left:3px solid var(--danger);padding-left:10px;}
   .req-main{font-size:14px;}
   .req-main b{color:var(--text);}
-  .req-meta{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim);margin-top:2px;}
+  .req-meta{font-family:var(--font-ui);font-size:12px;color:var(--text-dim);margin-top:2px;}
   .req-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
   .req-actions input[type=date]{width:auto;padding:5px 8px;font-size:13px;}
-  .empty-note{color:var(--text-dim);font-size:13px;padding:20px 4px;text-align:center;font-family:'IBM Plex Mono',monospace;}
+  .empty-note{color:var(--text-dim);font-size:13px;padding:20px 4px;text-align:center;font-family:var(--font-ui);}
 
   .auth-gate{max-width:320px;margin:20px auto;text-align:center;}
-  .auth-gate input{text-align:left;font-family:'Inter',sans-serif;font-size:14px;}
+  .auth-gate input{text-align:left;font-family:var(--font-body);font-size:14px;}
 
   .admin-manage{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
-  .cam-tag{display:flex;align-items:center;gap:6px;background:var(--bg-panel-2);border:1px solid var(--line);border-radius:20px;padding:5px 6px 5px 12px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .cam-tag{display:flex;align-items:center;gap:6px;background:var(--bg-panel-2);border:1px solid var(--line);border-radius:20px;padding:5px 6px 5px 12px;font-family:var(--font-ui);font-size:12px;}
   .cam-tag button{background:none;border:none;color:var(--danger);cursor:pointer;font-size:13px;padding:0 4px;}
 
   html, body{overflow-x:hidden;}
   @media(max-width:640px){
     body{font-size:14px;}
     .app{padding:16px 12px 40px;}
-    .masthead h1{font-size:28px;}
-    .tab{padding:9px 12px;font-size:14px;}
+    .masthead h1{font-size:18px;}
+    .tab{padding:9px 10px;font-size:9px;letter-spacing:1px;}
     .stats .n{font-size:18px;}
     .row2{grid-template-columns:1fr;}
     .cal-day{min-height:48px;padding:3px;}
-    .cal-chip{font-size:7px;padding:0 2px;}
+    .cal-grid{gap:3px;}
+    .cal-nav button{padding:5px 8px;font-size:12px;}
+    .cal-month{font-size:11px;letter-spacing:0.5px;text-align:center;}
+    /* no celular os nomes não cabem: cada reserva vira uma barrinha colorida */
+    .cal-chip{font-size:0;height:4px;padding:0;margin-top:2px;border-left:none;background:var(--danger);}
+    .cal-chip.pending{background:var(--pending);}
+    .cam-card .name{font-size:11px;letter-spacing:0.5px;}
     .cam-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));}
   }
 
   /* modal de disponibilidade */
-  .modal-overlay{position:fixed;inset:0;background:rgba(10,8,5,0.72);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px;}
+  .modal-overlay{position:fixed;inset:0;background:rgba(16,5,77,0.55);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px;}
   .modal-panel{background:var(--bg-panel);border:1px solid var(--line);border-radius:12px;padding:20px;max-width:420px;width:100%;max-height:85vh;overflow:auto;}
   .modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
   .cal-day.booked{background:var(--danger-soft);border-color:var(--danger);}
   .cal-day.pendingday{background:var(--pending-soft);border-color:var(--pending);}
   .cal-day.freeday{background:var(--ok-soft);border-color:var(--ok);cursor:pointer;}
-  .cal-day.freeday:hover{border-color:var(--accent);}
+  .cal-day.freeday:hover{border-color:var(--accent-2);}
   .cal-day.pastday{opacity:0.35;}
   .cal-day.sel-edge{outline:2px solid var(--accent);outline-offset:-2px;}
   .cal-day.sel-range{background:var(--accent-soft);border-color:var(--accent);}
-  .legend{display:flex;gap:14px;margin-top:14px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim);flex-wrap:wrap;}
+  .legend{display:flex;gap:14px;margin-top:14px;font-family:var(--font-ui);font-size:11px;color:var(--text-dim);flex-wrap:wrap;}
   .legend-dot{display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--bg-panel-2);border:1px solid var(--line);margin-right:5px;vertical-align:middle;}
   .legend-dot.booked{background:var(--danger-soft);border-color:var(--danger);}
   .legend-dot.pendingday{background:var(--pending-soft);border-color:var(--pending);}
+  .legend-dot.freeday{background:var(--ok-soft);border-color:var(--ok);}
 </style>
 </head>
 <body>
@@ -358,8 +373,8 @@
       head: [['Equipamento','Aluno','Fase','Professor','Retirada','Devolução','Status','Devolução real']],
       body: rows,
       styles: { fontSize: 8, cellPadding: 3 },
-      headStyles: { fillColor: [29,78,115] },
-      alternateRowStyles: { fillColor: [245,243,236] }
+      headStyles: { fillColor: [16,5,77] },
+      alternateRowStyles: { fillColor: [244,242,252] }
     });
 
     doc.save('historico-retiradas-cameras.pdf');
@@ -1081,7 +1096,7 @@
         <div class="admin-manage" id="camList">
           ${cameras.map(c=>`
             <div class="cam-tag">
-              <input type="text" class="cam-name-input" data-camid="${esc(c.id)}" value="${esc(c.name)}" maxlength="60" style="background:transparent;border:none;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;width:110px;padding:0;">
+              <input type="text" class="cam-name-input" data-camid="${esc(c.id)}" value="${esc(c.name)}" maxlength="60" style="background:transparent;border:none;color:var(--text);font-family:var(--font-ui);font-size:12px;width:110px;padding:0;">
               <button data-remove="${esc(c.id)}" title="Remover equipamento">✕</button>
             </div>
           `).join('')}
