@@ -79,6 +79,7 @@
   .badge{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;padding:2px 7px;border-radius:20px;}
   .badge.free{background:var(--ok-soft);color:var(--ok);}
   .badge.busy{background:var(--danger-soft);color:var(--danger);}
+  .badge.late{background:var(--danger);color:#fff;font-weight:600;}
 
   /* form */
   label{display:block;font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-dim);margin-bottom:5px;margin-top:14px;}
@@ -101,10 +102,12 @@
   /* requests list */
   .req-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 4px;border-bottom:1px solid var(--line);flex-wrap:wrap;}
   .req-row:last-child{border-bottom:none;}
+  .req-row.late{border-left:3px solid var(--danger);padding-left:10px;}
   .req-main{font-size:14px;}
   .req-main b{color:var(--text);}
   .req-meta{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim);margin-top:2px;}
-  .req-actions{display:flex;gap:8px;}
+  .req-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .req-actions input[type=date]{width:auto;padding:5px 8px;font-size:13px;}
   .empty-note{color:var(--text-dim);font-size:13px;padding:20px 4px;text-align:center;font-family:'IBM Plex Mono',monospace;}
 
   .auth-gate{max-width:320px;margin:20px auto;text-align:center;}
@@ -174,6 +177,13 @@
 
 <script>
 (function(){
+  // Se o Firebase não carregou (sem internet ou script bloqueado), avisa em vez de quebrar.
+  if(!window.firebase){
+    document.getElementById('subtitle').textContent = 'erro ao carregar';
+    document.getElementById('view').innerHTML = `<div class="panel"><div class="msg err">Não foi possível carregar o sistema (falha de conexão ou bloqueio de scripts). Verifique a internet e recarregue a página.</div></div>`;
+    return;
+  }
+
   // =====================================================================
   // 1) COLE AQUI A CONFIGURAÇÃO DO SEU PROJETO FIREBASE (passo 3 do guia)
   // =====================================================================
@@ -193,6 +203,9 @@
   const auth = firebase.auth();
   const COLLECTION = 'reserva-cameras';
   const RES_COLLECTION = 'reserva_cameras_reservations';
+  // Dados pessoais (nome completo, e-mail, observações) ficam nesta coleção,
+  // que só os professores conseguem ler. A agenda pública mostra só o nome abreviado.
+  const PRIV_COLLECTION = 'reserva_cameras_private';
 
   // =====================================================================
   // 2) COLE AQUI A CONFIGURAÇÃO DO EMAILJS (para o e-mail de confirmação)
@@ -208,6 +221,7 @@
     emailjs.init({ publicKey: emailjsConfig.publicKey });
   }
 
+  // r precisa ter os dados pessoais (use full(r) quando vier da lista pública)
   async function sendConfirmationEmail(r, statusTitle, statusMessage){
     if(!r.email) return;
     if(!window.emailjs || emailjsConfig.publicKey === "SUA_PUBLIC_KEY") return; // não configurado ainda
@@ -227,6 +241,8 @@
   // =====================================================================
   // 3) PROFESSORES — cada um recebe notificação só das suas solicitações
   //    e faz login com e-mail + senha (configurado no Firebase Authentication)
+  //    IMPORTANTE: se mudar esta lista, mude também a lista nas regras do
+  //    Firestore (arquivo firestore.rules). Só esses e-mails podem alterar dados.
   // =====================================================================
   const PROFESSORS = [
     { name: "Gabriel Garcia", email: "gabrielgarcia@unidavi.edu.br" },
@@ -255,6 +271,8 @@
 
   let cameras = [];
   let reservations = [];
+  let privById = {};          // dados pessoais por id de reserva (só para professores logados)
+  let unsubPrivate = null;
   let currentTab = 'agenda';
   let calMonth = new Date().getMonth();
   let calYear = new Date().getFullYear();
@@ -267,17 +285,49 @@
   let carryOverRequest = null;
   let currentUser = null;
   let manualFormOpen = false;
+  let returnFormId = null;    // reserva com o campo "data de devolução" aberto
   let loaded = false;
+  let loadError = false;
 
   const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   const DOW = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 
-  function uid(){ return Math.random().toString(36).slice(2,10); }
-  function todayStr(){ return new Date().toISOString().slice(0,10); }
+  function uid(){ return Math.random().toString(36).slice(2,10) + Math.random().toString(36).slice(2,6); }
+  function pad2(n){ return String(n).padStart(2,'0'); }
+  // Data no fuso local. (toISOString() usa UTC: no Brasil, depois das 21h viraria o dia seguinte.)
+  function toDateStr(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+  function todayStr(){ return toDateStr(new Date()); }
   function formatDateBR(dateStr){
-    const [y,m,d] = dateStr.split('-');
+    if(!dateStr) return '—';
+    const [y,m,d] = String(dateStr).split('-');
     return `${d}/${m}/${y}`;
   }
+  function daysBetween(a, b){
+    return Math.round((new Date(b+'T00:00:00') - new Date(a+'T00:00:00')) / 86400000);
+  }
+
+  // Todo texto digitado por alguém passa por aqui antes de entrar no HTML,
+  // para que um nome ou observação não possa virar código na página.
+  function esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // "Maria da Silva Souza" → "Maria S." (o que aparece na agenda pública)
+  function shortName(fullName){
+    const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+    if(!parts.length) return '';
+    return parts.length > 1 ? parts[0] + ' ' + parts[parts.length-1][0].toUpperCase() + '.' : parts[0];
+  }
+  function publicName(r){ return r.studentShort || shortName(r.studentName) || '—'; }
+  // Junta os dados públicos com os pessoais (quando o professor está logado)
+  function full(r){ return Object.assign({}, r, privById[r.id] || {}); }
+  function fullName(r){ return full(r).studentName || r.studentShort || '—'; }
+
+  function isProfessor(user){
+    const email = ((user && user.email) || '').toLowerCase();
+    return PROFESSORS.some(p => p.email.toLowerCase() === email);
+  }
+  function errText(e){ return (e && (e.code || e.message)) || 'erro desconhecido'; }
 
   function exportHistoryPDF(){
     if(!window.jspdf){ alert('A biblioteca de PDF ainda não carregou. Aguarde um instante e tente de novo.'); return; }
@@ -294,13 +344,13 @@
       .sort((a,b)=> b.startDate.localeCompare(a.startDate))
       .map(r => [
         camName(r.cameraId),
-        r.studentName || '',
+        fullName(r),
         r.fase ? ('Fase '+r.fase) : '—',
         r.professorName || '—',
         formatDateBR(r.startDate),
         formatDateBR(r.endDate),
         r.status==='approved' ? 'Aprovada' : r.status==='pending' ? 'Pendente' : 'Recusada',
-        r.returned ? ('Devolvida em ' + formatDateBR(r.returnedAt)) : (r.status==='approved' ? 'Em posse do aluno' : '—')
+        r.returned ? ('Devolvida em ' + formatDateBR(r.returnedAt)) : isOverdue(r) ? 'ATRASADA' : (r.status==='approved' ? 'Em posse do aluno' : '—')
       ]);
 
     doc.autoTable({
@@ -319,57 +369,123 @@
     return aStart <= bEnd && bStart <= aEnd;
   }
 
+  // Aprovada, ainda não devolvida e já passou da data de devolução
+  function isOverdue(r){
+    return r.status==='approved' && !r.returned && r.endDate < todayStr();
+  }
+
   function effectiveEnd(r){
-    return (r.returned && r.returnedAt) ? r.returnedAt : r.endDate;
+    if(r.returned && r.returnedAt) return r.returnedAt;
+    // Atrasada: continua ocupada pelo menos até hoje, até alguém registrar a devolução
+    if(isOverdue(r)) return todayStr();
+    return r.endDate;
   }
 
   async function loadState(){
     try{
       const camDoc = await db.collection(COLLECTION).doc('cameras').get();
-      cameras = camDoc.exists ? (camDoc.data().list || []) : null;
-    }catch(e){ console.error('erro ao carregar câmeras', e); cameras = null; }
-    if(!cameras || !cameras.length){
-      cameras = Array.from({length:8}, (_,i)=>({id: uid(), name: 'Kit ' + String(i+1).padStart(2,'0')}));
-      await saveCameras();
-    }
-    try{
+      cameras = camDoc.exists ? (camDoc.data().list || []) : [];
       const snap = await db.collection(RES_COLLECTION).get();
       reservations = snap.docs.map(d=>d.data());
-    }catch(e){ console.error('erro ao carregar reservas', e); reservations = []; }
+    }catch(e){
+      // Não cria nem salva nada se a leitura falhar: só avisa.
+      console.error('erro ao carregar dados', e);
+      loadError = true;
+      return;
+    }
     loaded = true;
 
     // Mantém tudo sincronizado em tempo real entre todos que estiverem com a página aberta.
-    // Só re-renderiza automaticamente na aba Agenda, para não apagar o que alguém
-    // esteja digitando num formulário em outra aba.
     db.collection(COLLECTION).doc('cameras').onSnapshot(doc=>{
-      if(doc.exists){ cameras = doc.data().list || []; if(currentTab==='agenda') render(); }
-    });
+      cameras = doc.exists ? (doc.data().list || []) : [];
+      refreshView();
+    }, e=>console.error('erro ao sincronizar câmeras', e));
     db.collection(RES_COLLECTION).onSnapshot(snap=>{
       reservations = snap.docs.map(d=>d.data());
-      if(currentTab==='agenda') render();
-    });
+      refreshView();
+    }, e=>console.error('erro ao sincronizar reservas', e));
 
     auth.onAuthStateChanged(user=>{
       currentUser = user;
+      if(unsubPrivate){ unsubPrivate(); unsubPrivate = null; }
+      privById = {};
+      if(user && isProfessor(user)){
+        unsubPrivate = db.collection(PRIV_COLLECTION).onSnapshot(snap=>{
+          privById = {};
+          snap.docs.forEach(d=>{ privById[d.id] = d.data(); });
+          refreshView();
+        }, e=>console.error('erro ao carregar dados pessoais', e));
+        migratePrivateData().catch(e=>console.error('erro na migração dos dados pessoais', e));
+      }
       if(currentTab==='admin') renderAdmin();
     });
   }
 
-  async function saveCameras(){
-    try{ await db.collection(COLLECTION).doc('cameras').set({list: cameras}); }
-    catch(e){ console.error('erro ao salvar câmeras', e); }
+  // Re-renderiza quando chegam dados novos, sem apagar o que alguém esteja digitando.
+  function isTyping(){
+    const a = document.activeElement;
+    return !!(a && a.closest && a.closest('#view') && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
   }
-  async function addReservationDoc(r){
-    try{ await db.collection(RES_COLLECTION).doc(r.id).set(r); }
-    catch(e){ console.error('erro ao criar reserva', e); }
+  function refreshView(){
+    if(!loaded) return;
+    renderStats();
+    if(currentTab==='agenda') renderAgenda();
+    else if(currentTab==='admin' && currentUser && !manualFormOpen && !returnFormId && !isTyping()) renderAdmin();
+    if(modalCamId) renderCamModal();
+  }
+
+  // Reservas antigas tinham nome completo, e-mail e observações no documento público.
+  // Na primeira vez que um professor entra, esses dados são movidos para a coleção privada.
+  async function migratePrivateData(){
+    const legacy = reservations.filter(r => ['studentName','email','notes','professorEmail'].some(k => k in r));
+    if(!legacy.length) return;
+    const del = firebase.firestore.FieldValue.delete();
+    for(let i=0; i<legacy.length; i+=200){
+      const batch = db.batch();
+      legacy.slice(i, i+200).forEach(r=>{
+        batch.set(privRef(r.id), {
+          studentName: r.studentName || '', email: r.email || '',
+          notes: r.notes || '', professorEmail: r.professorEmail || ''
+        }, {merge: true});
+        batch.update(resRef(r.id), {
+          studentShort: r.studentShort || shortName(r.studentName),
+          studentName: del, email: del, notes: del, professorEmail: del
+        });
+      });
+      await batch.commit();
+    }
+    console.log('Dados pessoais migrados:', legacy.length, 'reserva(s).');
+  }
+
+  // Altera a lista de câmeras dentro de uma transação: se dois professores
+  // editarem ao mesmo tempo, um não apaga a mudança do outro.
+  async function updateCameras(mutate){
+    const ref = db.collection(COLLECTION).doc('cameras');
+    await db.runTransaction(async tx=>{
+      const snap = await tx.get(ref);
+      const list = snap.exists ? (snap.data().list || []) : [];
+      tx.set(ref, {list: mutate(list.slice())});
+    });
+  }
+
+  function resRef(id){ return db.collection(RES_COLLECTION).doc(id); }
+  function privRef(id){ return db.collection(PRIV_COLLECTION).doc(id); }
+
+  // As funções abaixo NÃO escondem erros: quem chama mostra a mensagem ao usuário.
+  async function createReservation(pub, priv){
+    const batch = db.batch();
+    batch.set(resRef(pub.id), pub);
+    batch.set(privRef(pub.id), priv);
+    await batch.commit();
   }
   async function updateReservationDoc(id, changes){
-    try{ await db.collection(RES_COLLECTION).doc(id).update(changes); }
-    catch(e){ console.error('erro ao atualizar reserva', e); }
+    await resRef(id).update(changes);
   }
-  async function deleteReservationDoc(id){
-    try{ await db.collection(RES_COLLECTION).doc(id).delete(); }
-    catch(e){ console.error('erro ao excluir reserva', e); }
+  async function deleteReservation(id){
+    const batch = db.batch();
+    batch.delete(resRef(id));
+    batch.delete(privRef(id));
+    await batch.commit();
   }
 
   function camName(id){
@@ -382,6 +498,9 @@
   }
   function isCameraFreeToday(camId){
     return isCameraFreeOnDate(camId, todayStr());
+  }
+  function overdueFor(camId){
+    return reservations.find(r => r.cameraId===camId && isOverdue(r));
   }
 
   function renderStats(){
@@ -411,11 +530,11 @@
     let cells = '';
     for(let i=0;i<startDow;i++) cells += '<div class="cal-day empty"></div>';
     for(let d=1; d<=daysInMonth; d++){
-      const dateStr = calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      const dateStr = calYear+'-'+pad2(calMonth+1)+'-'+pad2(d);
       const dayRes = reservations.filter(r => r.status!=='rejected' && rangesOverlap(r.startDate, effectiveEnd(r), dateStr, dateStr));
       const isToday = dateStr === today;
       const isSelected = dateStr === agendaSelectedDate;
-      let chips = dayRes.slice(0,3).map(r => `<div class="cal-chip ${r.status==='pending'?'pending':''}" title="${camName(r.cameraId)} — ${r.studentName}">${camName(r.cameraId)}</div>`).join('');
+      let chips = dayRes.slice(0,3).map(r => `<div class="cal-chip ${r.status==='pending'?'pending':''}" title="${esc(camName(r.cameraId))} — ${esc(publicName(r))}">${esc(camName(r.cameraId))}</div>`).join('');
       if(dayRes.length > 3) chips += `<div class="cal-chip">+${dayRes.length-3}</div>`;
       cells += `<div class="cal-day ${isToday?'today':''} ${isSelected?'selected':''}" data-date="${dateStr}"><div class="dnum">${d}</div>${chips}</div>`;
     }
@@ -442,8 +561,8 @@
           return dayResList.map(r => `
             <div class="req-row">
               <div class="req-main">
-                <b>${camName(r.cameraId)}</b> · ${r.studentName}
-                <div class="req-meta">${formatDateBR(r.startDate)} → ${formatDateBR(r.endDate)} · <span style="color:${r.status==='approved'?'var(--ok)':'var(--pending)'}">${r.status==='approved'?'aprovada':'pendente'}</span>${r.professorName ? ' · Professor: '+r.professorName : ''}${r.fase ? ' · Fase '+r.fase : ''}</div>
+                <b>${esc(camName(r.cameraId))}</b> · ${esc(publicName(r))}
+                <div class="req-meta">${esc(formatDateBR(r.startDate))} → ${esc(formatDateBR(r.endDate))} · ${isOverdue(r) ? '<span style="color:var(--danger)">atrasada</span>' : `<span style="color:${r.status==='approved'?'var(--ok)':'var(--pending)'}">${r.status==='approved'?'aprovada':'pendente'}</span>`}${r.professorName ? ' · Professor: '+esc(r.professorName) : ''}${r.fase ? ' · Fase '+esc(r.fase) : ''}</div>
               </div>
             </div>
           `).join('');
@@ -457,13 +576,18 @@
         </div>
         <div class="req-meta" style="margin-bottom:10px;">Clique em um dia no calendário acima para ver a disponibilidade naquela data.</div>
         <div class="cam-grid">
-          ${cameras.map(c => `
-            <div class="cam-card" data-camid="${c.id}">
+          ${cameras.map(c => {
+            const free = isCameraFreeOnDate(c.id, agendaSelectedDate);
+            const late = agendaSelectedDate===today && overdueFor(c.id);
+            const badge = late ? '<span class="badge late">Atrasada</span>'
+              : `<span class="badge ${free?'free':'busy'}">${free?'Livre':'Em uso'}</span>`;
+            return `
+            <div class="cam-card" data-camid="${esc(c.id)}">
               <div class="iris"></div>
-              <div class="name">${c.name}</div>
-              <span class="badge ${isCameraFreeOnDate(c.id, agendaSelectedDate)?'free':'busy'}">${isCameraFreeOnDate(c.id, agendaSelectedDate)?'Livre':'Em uso'}</span>
-            </div>
-          `).join('')}
+              <div class="name">${esc(c.name)}</div>
+              ${badge}
+            </div>`;
+          }).join('')}
         </div>
       </div>
     `;
@@ -508,8 +632,7 @@
     let d = new Date(start+'T00:00:00');
     const endD = new Date(end+'T00:00:00');
     while(d <= endD){
-      const ds = d.toISOString().slice(0,10);
-      if(dayStatus(camId, ds) === 'booked') return false;
+      if(dayStatus(camId, toDateStr(d)) === 'booked') return false;
       d.setDate(d.getDate()+1);
     }
     return true;
@@ -560,7 +683,7 @@
     let cells = '';
     for(let i=0;i<startDow;i++) cells += '<div class="cal-day empty"></div>';
     for(let d=1; d<=daysInMonth; d++){
-      const dateStr = modalYear+'-'+String(modalMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      const dateStr = modalYear+'-'+pad2(modalMonth+1)+'-'+pad2(d);
       const status = dayStatus(modalCamId, dateStr);
       const isToday = dateStr === today;
       const isPast = dateStr < today;
@@ -575,14 +698,14 @@
     const dow = DOW.map(d=>`<div class="cal-dow">${d}</div>`).join('');
     const canSubmit = modalSelStart && modalSelEnd;
     const rangeLabel = modalSelStart
-      ? (modalSelEnd ? `${modalSelStart} → ${modalSelEnd}` : `${modalSelStart} → selecione a devolução`)
+      ? (modalSelEnd ? `${formatDateBR(modalSelStart)} → ${formatDateBR(modalSelEnd)}` : `${formatDateBR(modalSelStart)} → selecione a devolução`)
       : 'Clique num dia livre para escolher a retirada';
 
     document.getElementById('modalRoot').innerHTML = `
       <div class="modal-overlay" id="modalOverlay">
         <div class="modal-panel">
           <div class="modal-head">
-            <h2 class="section-title" style="margin:0;">${cam.name}</h2>
+            <h2 class="section-title" style="margin:0;">${esc(cam.name)}</h2>
             <button class="btn ghost small" id="closeModal">Fechar ✕</button>
           </div>
           <div class="cal-nav">
@@ -643,7 +766,7 @@
     const unavailableCount = cameras.length - avail.length;
 
     selectEl.innerHTML = avail.length
-      ? avail.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')
+      ? avail.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')
       : `<option value="">Nenhum equipamento livre nesse período</option>`;
 
     if(avail.some(c=>c.id===prevVal)) selectEl.value = prevVal;
@@ -663,9 +786,9 @@
       <div class="panel">
         <h2 class="section-title">Solicitar reserva</h2>
         <label>Seu nome</label>
-        <input type="text" id="f-name" placeholder="Nome completo">
+        <input type="text" id="f-name" placeholder="Nome completo" maxlength="120">
         <label>Seu e-mail</label>
-        <input type="text" id="f-email" placeholder="voce@exemplo.com">
+        <input type="text" id="f-email" placeholder="voce@exemplo.com" maxlength="120">
         <label>Fase do curso</label>
         <select id="f-fase">
           <option value="1">Fase 1</option>
@@ -675,7 +798,7 @@
         </select>
         <label>Professor responsável</label>
         <select id="f-professor">
-          ${PROFESSORS.map(p=>`<option value="${p.email}">${p.name}</option>`).join('')}
+          ${PROFESSORS.map(p=>`<option value="${esc(p.email)}">${esc(p.name)}</option>`).join('')}
         </select>
         <div class="row2">
           <div>
@@ -691,7 +814,7 @@
         <select id="f-camera"></select>
         <div class="req-meta" id="availNote" style="margin-top:6px;"></div>
         <label>Observações (opcional)</label>
-        <textarea id="f-notes" placeholder="Ex: uso para trabalho da disciplina X"></textarea>
+        <textarea id="f-notes" placeholder="Ex: uso para trabalho da disciplina X" maxlength="1000"></textarea>
         <button class="btn" id="submitReq">Enviar solicitação</button>
         <div id="formMsg"></div>
       </div>
@@ -713,7 +836,8 @@
     document.getElementById('f-start').onchange = refreshCameraOptions;
     document.getElementById('f-end').onchange = refreshCameraOptions;
 
-    document.getElementById('submitReq').onclick = async ()=>{
+    const submitBtn = document.getElementById('submitReq');
+    submitBtn.onclick = async ()=>{
       const name = document.getElementById('f-name').value.trim();
       const email = document.getElementById('f-email').value.trim();
       const professorEmail = document.getElementById('f-professor').value;
@@ -729,7 +853,7 @@
         msgEl.innerHTML = `<div class="msg err">Preencha nome, e-mail, data de retirada e devolução.</div>`;
         return;
       }
-      if(!/^\S+@\S+\.\S+$/.test(email)){
+      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
         msgEl.innerHTML = `<div class="msg err">Digite um e-mail válido.</div>`;
         return;
       }
@@ -749,19 +873,32 @@
         return;
       }
 
-      const newRes = {
-        id: uid(), cameraId: camId, studentName: name, email,
-        professorEmail, professorName, fase,
-        startDate: start, endDate: end, notes,
+      const pub = {
+        id: uid(), cameraId: camId, studentShort: shortName(name),
+        professorName, fase,
+        startDate: start, endDate: end,
         status: 'pending', requestedAt: new Date().toISOString(),
         returned: false, returnedAt: null
       };
-      reservations.push(newRes);
-      await addReservationDoc(newRes);
-      sendConfirmationEmail(newRes, 'Solicitação recebida', 'Sua solicitação de reserva foi registrada e está aguardando aprovação. Você receberá um novo e-mail assim que ela for avaliada.');
-      notifyProfessor(newRes);
+      const priv = { studentName: name, email, notes, professorEmail };
+
+      submitBtn.disabled = true;
+      msgEl.innerHTML = `<div class="msg warn">Enviando...</div>`;
+      try{
+        await createReservation(pub, priv);
+      }catch(e){
+        console.error('erro ao criar reserva', e);
+        msgEl.innerHTML = `<div class="msg err">Não foi possível enviar a solicitação. Verifique sua internet e tente de novo. Se o problema continuar, avise um professor. (${esc(errText(e))})</div>`;
+        submitBtn.disabled = false;
+        return;
+      }
+      // Só manda os e-mails depois que a reserva foi gravada de verdade
+      const fullRes = Object.assign({}, pub, priv);
+      sendConfirmationEmail(fullRes, 'Solicitação recebida', 'Sua solicitação de reserva foi registrada e está aguardando aprovação. Você receberá um novo e-mail assim que ela for avaliada.');
+      notifyProfessor(fullRes);
 
       msgEl.innerHTML = `<div class="msg ok">Solicitação enviada! Você vai receber um e-mail de confirmação e outro quando ela for avaliada.</div>`;
+      submitBtn.disabled = false;
       document.getElementById('f-name').value='';
       document.getElementById('f-email').value='';
       document.getElementById('f-notes').value='';
@@ -812,29 +949,72 @@
       return;
     }
 
+    if(!isProfessor(currentUser)){
+      document.getElementById('view').innerHTML = `
+        <div class="panel auth-gate">
+          <h2 class="section-title">Sem permissão</h2>
+          <div class="msg err">O usuário ${esc(currentUser.email)} não está na lista de professores deste sistema.</div>
+          <button class="btn ghost" id="logoutBtn" style="width:100%">Sair</button>
+        </div>
+      `;
+      document.getElementById('logoutBtn').onclick = ()=> auth.signOut();
+      return;
+    }
+
+    const today = todayStr();
     const pending = reservations.filter(r=>r.status==='pending').sort((a,b)=>a.startDate.localeCompare(b.startDate));
-    const decided = reservations.filter(r=>r.status!=='pending').sort((a,b)=>b.requestedAt.localeCompare(a.requestedAt)).slice(0,15);
+    // Aprovadas e ainda não devolvidas aparecem todas (não só as recentes), com as atrasadas no topo
+    const open = reservations.filter(r=>r.status==='approved' && !r.returned)
+      .sort((a,b)=> (isOverdue(b)-isOverdue(a)) || a.endDate.localeCompare(b.endDate));
+    const decided = reservations.filter(r=>r.status==='rejected' || r.returned)
+      .sort((a,b)=>(b.requestedAt||'').localeCompare(a.requestedAt||'')).slice(0,15);
+    const lateCount = open.filter(isOverdue).length;
+
+    const returnControls = (r)=> returnFormId===r.id ? `
+        <input type="date" id="ret-date" value="${today}" min="${esc(r.startDate)}" max="${today}">
+        <button class="btn small" data-id="${esc(r.id)}" data-action="return-confirm">Confirmar devolução</button>
+        <button class="btn small ghost" data-id="${esc(r.id)}" data-action="return-cancel">Cancelar</button>
+      ` : `
+        ${r.startDate <= today ? `<button class="btn small ghost" data-id="${esc(r.id)}" data-action="return-open">Registrar devolução</button>` : ''}
+        <button class="btn small ghost" data-id="${esc(r.id)}" data-action="delete">Excluir</button>
+      `;
 
     document.getElementById('view').innerHTML = `
       <div class="panel">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
-          <h2 class="section-title" style="margin:0;">Olá, ${currentUser.email}</h2>
+          <h2 class="section-title" style="margin:0;">Olá, ${esc(currentUser.email)}</h2>
           <button class="btn ghost small" id="logoutBtn">Sair</button>
         </div>
         <h2 class="section-title">Solicitações pendentes (${pending.length})</h2>
-        ${pending.length ? pending.map(r=>`
+        ${pending.length ? pending.map(r=>{ const f = full(r); return `
           <div class="req-row">
             <div class="req-main">
-              <b>${camName(r.cameraId)}</b> · ${r.studentName} · ${r.email || 'sem e-mail'}
-              <div class="req-meta">${formatDateBR(r.startDate)} → ${formatDateBR(r.endDate)}${r.notes ? ' · '+r.notes : ''} · Professor: ${r.professorName || '—'}${r.fase ? ' · Fase '+r.fase : ''}</div>
+              <b>${esc(camName(r.cameraId))}</b> · ${esc(fullName(r))} · ${esc(f.email || 'sem e-mail')}
+              <div class="req-meta">${esc(formatDateBR(r.startDate))} → ${esc(formatDateBR(r.endDate))}${f.notes ? ' · '+esc(f.notes) : ''} · Professor: ${esc(r.professorName || '—')}${r.fase ? ' · Fase '+esc(r.fase) : ''}</div>
             </div>
             <div class="req-actions">
-              <button class="btn small" data-id="${r.id}" data-action="approve">Aprovar</button>
-              <button class="btn small danger" data-id="${r.id}" data-action="reject">Recusar</button>
-              <button class="btn small ghost" data-id="${r.id}" data-action="delete">Excluir</button>
+              <button class="btn small" data-id="${esc(r.id)}" data-action="approve">Aprovar</button>
+              <button class="btn small danger" data-id="${esc(r.id)}" data-action="reject">Recusar</button>
+              <button class="btn small ghost" data-id="${esc(r.id)}" data-action="delete">Excluir</button>
             </div>
           </div>
-        `).join('') : `<div class="empty-note">Nenhuma solicitação pendente.</div>`}
+        `;}).join('') : `<div class="empty-note">Nenhuma solicitação pendente.</div>`}
+      </div>
+
+      <div class="panel">
+        <h2 class="section-title">Aprovadas a devolver (${open.length})${lateCount ? ` · <span style="color:var(--danger)">${lateCount} atrasada(s)</span>` : ''}</h2>
+        ${open.length ? open.map(r=>{
+          const late = isOverdue(r);
+          return `
+          <div class="req-row ${late?'late':''}">
+            <div class="req-main">
+              <b>${esc(camName(r.cameraId))}</b> · ${esc(fullName(r))}
+              ${late ? `<span class="badge late">Atrasada há ${daysBetween(r.endDate, today)} dia(s)</span>` : ''}
+              <div class="req-meta">${esc(formatDateBR(r.startDate))} → ${esc(formatDateBR(r.endDate))} · ${r.startDate > today ? 'ainda não retirada' : 'em posse do aluno'}${r.professorName ? ' · Professor: '+esc(r.professorName) : ''}</div>
+            </div>
+            <div class="req-actions">${returnControls(r)}</div>
+          </div>`;
+        }).join('') : `<div class="empty-note">Nenhum equipamento fora no momento.</div>`}
       </div>
 
       <div class="panel">
@@ -842,9 +1022,9 @@
           <h2 class="section-title">Registrar retirada manual</h2>
           <div class="req-meta" style="margin-bottom:10px;">Para retiradas feitas fora do sistema (ex: direto com a coordenação). Datas passadas são permitidas e a reserva já entra como aprovada, associada a você.</div>
           <label>Nome do aluno</label>
-          <input type="text" id="m-name" placeholder="Nome completo">
+          <input type="text" id="m-name" placeholder="Nome completo" maxlength="120">
           <label>E-mail (opcional)</label>
-          <input type="text" id="m-email" placeholder="voce@exemplo.com">
+          <input type="text" id="m-email" placeholder="voce@exemplo.com" maxlength="120">
           <label>Fase do curso</label>
           <select id="m-fase">
             <option value="1">Fase 1</option>
@@ -854,7 +1034,7 @@
           </select>
           <label>Equipamento</label>
           <select id="m-camera">
-            ${cameras.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}
+            ${cameras.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}
           </select>
           <div class="row2">
             <div>
@@ -867,7 +1047,7 @@
             </div>
           </div>
           <label>Observações (opcional)</label>
-          <textarea id="m-notes" placeholder="Ex: retirada direto com a coordenação por urgência"></textarea>
+          <textarea id="m-notes" placeholder="Ex: retirada direto com a coordenação por urgência" maxlength="1000"></textarea>
           <div style="display:flex;gap:8px;">
             <button class="btn" id="submitManual">Registrar retirada</button>
             <button class="btn ghost" id="cancelManual">Cancelar</button>
@@ -886,15 +1066,11 @@
         ${decided.length ? decided.map(r=>`
           <div class="req-row">
             <div class="req-main">
-              <b>${camName(r.cameraId)}</b> · ${r.studentName}
-              <div class="req-meta">${formatDateBR(r.startDate)} → ${formatDateBR(r.endDate)} · <span style="color:${r.status==='approved'?'var(--ok)':'var(--danger)'}">${r.status==='approved'?'aprovada':'recusada'}</span>${r.status==='approved' ? (r.returned ? ` · devolvida em ${formatDateBR(r.returnedAt)}` : ' · em posse do aluno') : ''}</div>
+              <b>${esc(camName(r.cameraId))}</b> · ${esc(fullName(r))}
+              <div class="req-meta">${esc(formatDateBR(r.startDate))} → ${esc(formatDateBR(r.endDate))} · ${r.status==='approved' ? `<span style="color:var(--ok)">aprovada</span> · devolvida em ${esc(formatDateBR(r.returnedAt))}` : '<span style="color:var(--danger)">recusada</span>'}</div>
             </div>
             <div class="req-actions">
-              ${(r.status==='approved' && !r.returned) ? `
-                <button class="btn small ghost" data-id="${r.id}" data-action="return-ontime">Devolvida no prazo</button>
-                <button class="btn small ghost" data-id="${r.id}" data-action="return-late">Devolvida em atraso</button>
-              ` : ''}
-              <button class="btn small ghost" data-id="${r.id}" data-action="delete">Excluir</button>
+              <button class="btn small ghost" data-id="${esc(r.id)}" data-action="delete">Excluir</button>
             </div>
           </div>
         `).join('') : `<div class="empty-note">Sem histórico ainda.</div>`}
@@ -905,15 +1081,15 @@
         <div class="admin-manage" id="camList">
           ${cameras.map(c=>`
             <div class="cam-tag">
-              <input type="text" class="cam-name-input" data-camid="${c.id}" value="${c.name.replace(/"/g,'&quot;')}" style="background:transparent;border:none;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;width:110px;padding:0;">
-              <button data-remove="${c.id}">✕</button>
+              <input type="text" class="cam-name-input" data-camid="${esc(c.id)}" value="${esc(c.name)}" maxlength="60" style="background:transparent;border:none;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;width:110px;padding:0;">
+              <button data-remove="${esc(c.id)}" title="Remover equipamento">✕</button>
             </div>
           `).join('')}
         </div>
         <div class="req-meta" style="margin-top:6px;">Edite o nome e clique fora do campo (ou aperte Enter) para salvar.</div>
         <label>Adicionar equipamento</label>
         <div style="display:flex;gap:8px;">
-          <input type="text" id="newCamName" placeholder="Nome do equipamento">
+          <input type="text" id="newCamName" placeholder="Nome do equipamento" maxlength="60">
           <button class="btn small" id="addCam">Adicionar</button>
         </div>
       </div>
@@ -921,68 +1097,78 @@
 
     document.getElementById('view').querySelectorAll('.cam-name-input').forEach(inp=>{
       const commit = async ()=>{
-        const cam = cameras.find(c=>c.id===inp.dataset.camid);
+        const id = inp.dataset.camid;
+        const cam = cameras.find(c=>c.id===id);
         const newName = inp.value.trim();
         if(!cam || !newName || newName===cam.name) return;
-        cam.name = newName;
-        await saveCameras();
-        renderStats();
+        try{
+          await updateCameras(list => list.map(c => c.id===id ? Object.assign({}, c, {name: newName}) : c));
+        }catch(e){
+          console.error('erro ao renomear equipamento', e);
+          alert('Não foi possível salvar o novo nome. (' + errText(e) + ')');
+          inp.value = cam.name;
+        }
       };
       inp.addEventListener('blur', commit);
       inp.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ inp.blur(); } });
     });
 
-    document.getElementById('logoutBtn').onclick = ()=> auth.signOut();
+    document.getElementById('logoutBtn').onclick = ()=>{ manualFormOpen = false; returnFormId = null; auth.signOut(); };
     document.getElementById('exportPdfBtn').onclick = exportHistoryPDF;
 
     document.getElementById('view').querySelectorAll('[data-action]').forEach(btn=>{
       btn.onclick = async ()=>{
         const r = reservations.find(x=>x.id===btn.dataset.id);
         if(!r) return;
+        const action = btn.dataset.action;
 
-        if(btn.dataset.action==='delete'){
-          if(!confirm(`Excluir a reserva de ${r.studentName} (${camName(r.cameraId)}, ${formatDateBR(r.startDate)} → ${formatDateBR(r.endDate)})? Essa ação não pode ser desfeita.`)) return;
-          reservations = reservations.filter(x=>x.id!==r.id);
-          await deleteReservationDoc(r.id);
-          renderAdmin(); renderStats();
-          return;
-        }
+        if(action==='return-open'){ returnFormId = r.id; renderAdmin(); return; }
+        if(action==='return-cancel'){ returnFormId = null; renderAdmin(); return; }
 
-        if(btn.dataset.action==='return-ontime'){
-          r.returned = true;
-          r.returnedAt = r.endDate; // devolvido conforme combinado
-          await updateReservationDoc(r.id, { returned: true, returnedAt: r.returnedAt });
-          renderAdmin(); renderStats();
-          return;
-        }
-
-        if(btn.dataset.action==='return-late'){
-          const input = prompt('Informe a data real em que o equipamento foi devolvido (AAAA-MM-DD):', todayStr());
-          if(!input) return;
-          if(!/^\d{4}-\d{2}-\d{2}$/.test(input)){
-            alert('Data inválida. Use o formato AAAA-MM-DD, por exemplo 2026-08-11.');
-            return;
+        btn.disabled = true;
+        try{
+          if(action==='delete'){
+            if(!confirm(`Excluir a reserva de ${fullName(r)} (${camName(r.cameraId)}, ${formatDateBR(r.startDate)} → ${formatDateBR(r.endDate)})? Essa ação não pode ser desfeita.`)){ btn.disabled = false; return; }
+            await deleteReservation(r.id);
           }
-          r.returned = true;
-          r.returnedAt = input;
-          await updateReservationDoc(r.id, { returned: true, returnedAt: input });
-          renderAdmin(); renderStats();
-          return;
-        }
-
-        if(btn.dataset.action==='approve'){
-          const conflict = reservations.some(o => o.id!==r.id && o.cameraId===r.cameraId && o.status==='approved' && rangesOverlap(o.startDate, effectiveEnd(o), r.startDate, r.endDate));
-          if(conflict){
-            alert('Não é possível aprovar: esse equipamento já tem outra reserva aprovada que se sobrepõe a este período. Recuse este pedido ou ajuste a outra reserva primeiro.');
-            return;
+          else if(action==='return-confirm'){
+            const input = document.getElementById('ret-date').value;
+            if(!/^\d{4}-\d{2}-\d{2}$/.test(input) || input < r.startDate || input > todayStr()){
+              alert('Escolha uma data de devolução entre ' + formatDateBR(r.startDate) + ' e hoje.');
+              btn.disabled = false;
+              return;
+            }
+            await updateReservationDoc(r.id, { returned: true, returnedAt: input });
+            returnFormId = null;
           }
-        }
-        r.status = btn.dataset.action==='approve' ? 'approved' : 'rejected';
-        await updateReservationDoc(r.id, { status: r.status });
-        if(r.status==='approved'){
-          sendConfirmationEmail(r, 'Reserva aprovada ✅', 'Sua reserva foi aprovada! Pode retirar o equipamento na data combinada.');
-        }else{
-          sendConfirmationEmail(r, 'Reserva recusada', 'Sua solicitação de reserva não pôde ser aprovada para o período pedido. Entre em contato com o responsável para mais detalhes.');
+          else if(action==='approve' || action==='reject'){
+            if(action==='approve'){
+              const conflict = reservations.some(o => o.id!==r.id && o.cameraId===r.cameraId && o.status==='approved' && rangesOverlap(o.startDate, effectiveEnd(o), r.startDate, r.endDate));
+              if(conflict){
+                alert('Não é possível aprovar: esse equipamento já tem outra reserva aprovada que se sobrepõe a este período. Recuse este pedido ou ajuste a outra reserva primeiro.');
+                btn.disabled = false;
+                return;
+              }
+              const late = reservations.find(o => o.id!==r.id && o.cameraId===r.cameraId && isOverdue(o));
+              if(late && !confirm(`Atenção: o equipamento ${camName(r.cameraId)} está com devolução atrasada (${fullName(late)}, deveria ter voltado em ${formatDateBR(late.endDate)}). Aprovar mesmo assim?`)){
+                btn.disabled = false;
+                return;
+              }
+            }
+            const status = action==='approve' ? 'approved' : 'rejected';
+            await updateReservationDoc(r.id, { status });
+            const fr = Object.assign(full(r), { status });
+            if(status==='approved'){
+              sendConfirmationEmail(fr, 'Reserva aprovada ✅', 'Sua reserva foi aprovada! Pode retirar o equipamento na data combinada.');
+            }else{
+              sendConfirmationEmail(fr, 'Reserva recusada', 'Sua solicitação de reserva não pôde ser aprovada para o período pedido. Entre em contato com o responsável para mais detalhes.');
+            }
+          }
+        }catch(e){
+          console.error('erro na ação '+action, e);
+          alert('Não foi possível concluir a ação. Verifique a internet e tente de novo. (' + errText(e) + ')');
+          btn.disabled = false;
+          return;
         }
         renderAdmin(); renderStats();
       };
@@ -1012,49 +1198,72 @@
         msgEl.innerHTML = `<div class="msg err">A data de devolução não pode ser antes da retirada.</div>`;
         return;
       }
-      if(email && !/^\S+@\S+\.\S+$/.test(email)){
+      if(email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
         msgEl.innerHTML = `<div class="msg err">Digite um e-mail válido, ou deixe em branco.</div>`;
         return;
       }
       const conflict = reservations.some(r => r.cameraId===camId && r.status==='approved' && rangesOverlap(r.startDate, effectiveEnd(r), start, end));
 
       const professorEntry = PROFESSORS.find(p=>p.email.toLowerCase()===(currentUser.email||'').toLowerCase());
-      const manualRes = {
-        id: uid(), cameraId: camId, studentName: name, email,
-        professorEmail: currentUser.email, professorName: professorEntry ? professorEntry.name : currentUser.email, fase,
-        startDate: start, endDate: end, notes,
+      const pub = {
+        id: uid(), cameraId: camId, studentShort: shortName(name),
+        professorName: professorEntry ? professorEntry.name : currentUser.email, fase,
+        startDate: start, endDate: end,
         status: 'approved', requestedAt: new Date().toISOString(),
         returned: false, returnedAt: null
       };
-      reservations.push(manualRes);
-      await addReservationDoc(manualRes);
-      if(email) sendConfirmationEmail(manualRes, 'Retirada registrada ✅', 'Sua retirada do equipamento foi registrada manualmente pela administração.');
+      const priv = { studentName: name, email, notes, professorEmail: currentUser.email };
 
-      msgEl.innerHTML = conflict
-        ? `<div class="msg warn">Retirada registrada, mas havia outra reserva aprovada sobreposta nesse período — confira o histórico.</div>`
-        : `<div class="msg ok">Retirada registrada com sucesso.</div>`;
+      submitManualBtn.disabled = true;
+      try{
+        await createReservation(pub, priv);
+      }catch(e){
+        console.error('erro ao registrar retirada manual', e);
+        msgEl.innerHTML = `<div class="msg err">Não foi possível registrar a retirada. (${esc(errText(e))})</div>`;
+        submitManualBtn.disabled = false;
+        return;
+      }
+      if(email) sendConfirmationEmail(Object.assign({}, pub, priv), 'Retirada registrada ✅', 'Sua retirada do equipamento foi registrada manualmente pela administração.');
+
       manualFormOpen = false;
       renderAdmin(); renderStats();
+      if(conflict) alert('Retirada registrada, mas havia outra reserva aprovada sobreposta nesse período — confira a lista.');
     };
 
     document.getElementById('addCam').onclick = async ()=>{
       const nameEl = document.getElementById('newCamName');
       const name = nameEl.value.trim();
       if(!name) return;
-      cameras.push({id: uid(), name});
-      await saveCameras();
-      renderAdmin(); renderStats();
+      try{
+        await updateCameras(list => list.concat([{id: uid(), name}]));
+        nameEl.value = '';
+      }catch(e){
+        console.error('erro ao adicionar equipamento', e);
+        alert('Não foi possível adicionar o equipamento. (' + errText(e) + ')');
+      }
     };
     document.getElementById('view').querySelectorAll('[data-remove]').forEach(btn=>{
       btn.onclick = async ()=>{
-        cameras = cameras.filter(c=>c.id!==btn.dataset.remove);
-        await saveCameras();
-        renderAdmin(); renderStats();
+        const id = btn.dataset.remove;
+        const active = reservations.filter(r => r.cameraId===id && (r.status==='pending' || (r.status==='approved' && !r.returned))).length;
+        const warning = active ? `\n\nAtenção: há ${active} reserva(s) pendente(s) ou em aberto para este equipamento. Elas passarão a aparecer como "(removida)".` : '';
+        if(!confirm(`Remover o equipamento "${camName(id)}"?${warning}`)) return;
+        try{
+          await updateCameras(list => list.filter(c => c.id!==id));
+        }catch(e){
+          console.error('erro ao remover equipamento', e);
+          alert('Não foi possível remover o equipamento. (' + errText(e) + ')');
+        }
       };
     });
   }
 
   function render(){
+    if(loadError){
+      document.getElementById('subtitle').textContent = 'erro ao carregar';
+      document.getElementById('view').innerHTML = `<div class="panel"><div class="msg err">Não foi possível carregar os dados. Verifique sua conexão e recarregue a página.</div></div>`;
+      return;
+    }
     if(!loaded){
       document.getElementById('view').innerHTML = `<div class="panel"><div class="empty-note">Carregando dados...</div></div>`;
       return;

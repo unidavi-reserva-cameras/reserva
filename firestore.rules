@@ -1,0 +1,76 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Só estes e-mails podem alterar dados.
+    // Mantenha esta lista igual à lista PROFESSORS do index.html.
+    function isProf() {
+      return request.auth != null
+        && request.auth.token.email is string
+        && request.auth.token.email.lower() in [
+          'gabrielgarcia@unidavi.edu.br',
+          'prof.jean.caetano@unidavi.edu.br',
+          'sandroa@unidavi.edu.br'
+        ];
+    }
+
+    function isDate(v) {
+      return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function str(v, max) {
+      return v is string && v.size() <= max;
+    }
+
+    // Pedido feito por aluno (sem login): só dados públicos, sempre "pendente".
+    function validPublicRequest(resId) {
+      let d = request.resource.data;
+      let fields = ['id', 'cameraId', 'studentShort', 'professorName', 'fase',
+                    'startDate', 'endDate', 'status', 'requestedAt', 'returned', 'returnedAt'];
+      return d.keys().hasOnly(fields) && d.keys().hasAll(fields)
+        && d.id == resId
+        && str(d.cameraId, 40)
+        && str(d.studentShort, 130)
+        && str(d.professorName, 80)
+        && d.fase in ['1', '2', '3', '4']
+        && isDate(d.startDate) && isDate(d.endDate) && d.startDate <= d.endDate
+        && d.status == 'pending'
+        && str(d.requestedAt, 40)
+        && d.returned == false
+        && d.returnedAt == null;
+    }
+
+    // Dados pessoais do pedido: só podem ser gravados junto com um pedido
+    // pendente de mesmo id (na mesma gravação).
+    function validPrivateRequest(resId) {
+      let d = request.resource.data;
+      let fields = ['studentName', 'email', 'notes', 'professorEmail'];
+      return d.keys().hasOnly(fields) && d.keys().hasAll(fields)
+        && str(d.studentName, 120) && d.studentName.size() > 0
+        && str(d.email, 120) && d.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')
+        && str(d.notes, 1000)
+        && str(d.professorEmail, 120)
+        && getAfter(/databases/$(database)/documents/reserva_cameras_reservations/$(resId)).data.status == 'pending';
+    }
+
+    // Lista de equipamentos: todos leem, só professores alteram.
+    match /reserva-cameras/cameras {
+      allow read: if true;
+      allow write: if isProf();
+    }
+
+    // Parte pública das reservas (agenda): sem e-mail nem nome completo.
+    match /reserva_cameras_reservations/{resId} {
+      allow read: if true;
+      allow create: if isProf() || validPublicRequest(resId);
+      allow update, delete: if isProf();
+    }
+
+    // Dados pessoais: só professores leem.
+    match /reserva_cameras_private/{resId} {
+      allow read: if isProf();
+      allow create: if isProf() || validPrivateRequest(resId);
+      allow update, delete: if isProf();
+    }
+  }
+}
